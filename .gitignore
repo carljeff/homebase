@@ -54,3 +54,12 @@ yarn-error.log*
 /images/
 Copy_Me_That*
 *.private.json
+
+# Personal vault exports, local experiments, keys, and private documents
+/vault-data/
+/vault-exports/
+/private-documents/
+*.vault-backup
+*.key
+*.p12
+*.pfx

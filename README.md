@@ -35,3 +35,5 @@ See `docs/api.md`. Publishing the MCP-capable Site provisions a private plugin. 
 ## Future modules
 
 Future profile records should carry `{id, householdId, displayName, details, version}`; contacts, activities, sizes and gift ideas should be separate profile-related record kinds with schema validation. Future friend and interaction records should carry `{id, householdId, friendId, occurredAt, source, summary, consent}`; store minimal interaction metadata and no message content by default. No iMessage source is connected. Before multi-household expansion, add explicit memberships and household foreign keys and filter every query by membership; the current database is intentionally one household per private Site.
+
+The Family Vault tab is a Phase 1 layout only: secure storage is disabled. See [the security assessment and Phase 2 approval gates](docs/vault-security-assessment.md) before considering any identifier or document storage. Ordinary APIs and the ChatGPT connector exclude vault records.

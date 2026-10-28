@@ -4,7 +4,7 @@ Profiles (`kind: family`) and gift ideas (`kind: wishlist`) use the existing pri
 
 ## Interface
 
-Family cards open About, Wishlist, and Important dates tabs. An emoji or initials can be used as an optional avatar; no remote avatar fetch or public image URL is required. Profile editing supports birthday, interests, favorites, sizes, personal notes, Amazon wishlist URL, and dates with optional reminders and annual recurrence. Birthdays and upcoming dates appear on the dashboard. Reminder dates are in-app only, not scheduled notifications.
+Family cards open Overview, Wishlist, Important Dates and Vault tabs. Vault is a disabled Phase 1 layout; see [the security assessment](vault-security-assessment.md). An emoji or initials can be used as an optional avatar; no remote avatar fetch or public image URL is required. Profile editing supports birthday, interests, favorites, sizes, personal notes, Amazon wishlist URL, and dates with optional reminders and annual recurrence. Birthdays and upcoming dates appear on the dashboard. Reminder dates are in-app only, not scheduled notifications.
 
 Gift ideas support HTTPS product links, notes, priority, purchase status, and surprise visibility. `source` (manual/amazon) and `externalId` reserve space for a future approved import; no Amazon account integration or scraping runs today. Original external links open only on explicit navigation.
 
