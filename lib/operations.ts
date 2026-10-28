@@ -4,7 +4,7 @@ import { z } from "zod";
 import { list,save,remove } from "./store";
 import { consolidate,type Kind } from "./domain";
 export async function operate(input:any,user:string){
- if(["meal_suggestions","plan_recipe","meal_feedback"].includes(input.action))return mealOperation(input,user);
+ if(["meal_suggestions","plan_recipe","plan_leftovers","meal_feedback"].includes(input.action))return mealOperation(input,user);
  const op=z.enum(["list","save","delete","generate_groceries","import_recipes"]).parse(input.action);
  if(op==="list")return list();
  if(op==="save"){if(input.kind==="meal"&&input.data?.status==="cooked"){const d=input.data.cookedDate||input.data.date;const settings=(await list()).find(r=>r.kind==="settings");const today=new Intl.DateTimeFormat("en-CA",{timeZone:settings?.data.timezone??"America/Indiana/Indianapolis",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());if(d>today)throw new Error("Confirmed cooking cannot be in the future");}return save(input.kind as Kind,input.data,user,input.id,input.version);}
