@@ -15,6 +15,13 @@
       "when": 1793188683717,
       "tag": "0001_complete_molten_man",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1793216808439,
+      "tag": "0002_silly_bushwacker",
+      "breakpoints": true
     }
   ]
 }

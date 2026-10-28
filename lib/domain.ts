@@ -1,9 +1,12 @@
+import {familySchema,wishlistSchema} from "./family.ts";
 import { foodProfileSchema } from "./meal-profile.ts";
 import { z } from "zod";
 const short=z.string().trim().min(1).max(1000), note=z.string().max(150000).default("");
 const revision=z.object({savedAt:z.string(),recipe:z.record(z.unknown())});
 const ingredient=z.object({name:short,quantity:z.number().nonnegative().max(10000),unit:z.string().max(40).default(""),category:z.string().max(80).default("Other"),raw:z.string().max(10000).optional(),quantityKnown:z.boolean().optional()});
 export const schemas={
+ family:familySchema,
+ wishlist:wishlistSchema,
  recipe:z.object({title:short,description:note,favorite:z.boolean().default(false),servings:z.number().int().min(1).max(100),minutes:z.number().int().min(0).max(2880),ingredients:z.array(ingredient).max(1000),instructions:note,tags:z.array(z.string().max(1000)).max(200).default([]),notes:note,likes:z.array(z.string().max(80)).max(20).default([]),revisions:z.array(revision).max(25).default([])}),
  meal:z.object({date:z.string().regex(/^\d{4}-\d{2}-\d{2}$/),title:short,recipeId:z.string().max(100).default(""),type:z.enum(["cook","leftovers","flex","out"]),status:z.enum(["planned","cooked","skipped","replaced"]).default("planned"),cookedDate:z.string().regex(/^(\d{4}-\d{2}-\d{2})?$/).default(""),substitutions:z.array(z.object({from:z.string().max(100),to:z.string().max(200),saturatedFatGramsPerServing:z.number().nullable().optional()})).max(10).default([]),previousRecipeIds:z.array(z.string().max(100)).max(50).default([]),plannedAt:z.string().max(80).default(""),sourceMealId:z.string().max(100).default(""),sourceMealDate:z.string().regex(/^(\d{4}-\d{2}-\d{2})?$/).default(""),notes:note,servings:z.number().min(1).max(100).default(4)}),
  grocery:z.object({name:short,quantity:z.number().nonnegative().max(100000),unit:z.string().max(40).default(""),category:z.string().max(80).default("Other"),notes:note,checked:z.boolean().default(false),staple:z.boolean().default(false),pantry:z.boolean().default(false),quantityKnown:z.boolean().default(true),generated:z.boolean().default(false)}),
