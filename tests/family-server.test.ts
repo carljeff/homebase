@@ -1,7 +1,8 @@
-// Run: node --experimental-strip-types --import ./tests/server-env.mjs --test tests/family-server.test.ts
+// Run with the same node --experimental-strip-types --test command as other suites.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {operate as operateImpl} from '../lib/operations';
+await import('./server-env.mjs');
+const {operate:operateImpl}=await import('../lib/operations');
 const operate:(...args:Parameters<typeof operateImpl>)=>Promise<any>=operateImpl;
 const giver='test-giver',recipient='test-recipient';
 test('private family setup is persistent and idempotent without overwriting settings or profile edits',async()=>{
