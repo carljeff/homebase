@@ -43,3 +43,14 @@ yarn-error.log*
 
 # OS metadata
 .DS_Store
+
+# Private recipe exports, transformed catalogs and import media (never source)
+*.zip
+/private-imports/
+/import-data/
+/recipe-exports/
+/recipes.html
+/recipes.json
+/images/
+Copy_Me_That*
+*.private.json
