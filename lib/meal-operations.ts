@@ -1,3 +1,4 @@
+import {leftoverOptions,leftoverMeal} from "./leftovers";
 import {env} from "cloudflare:workers";
 import {z} from "zod";
 import {list,save} from "./store";
@@ -10,7 +11,11 @@ async function stableId(text:string){const bytes=await crypto.subtle.digest("SHA
 export async function mealOperation(input:any,user:string){const rows=await list(),now=new Date().toISOString();const day=today(rows);const db=env.DB;if(!db)throw new Error("Database unavailable");
  if(input.action==="meal_suggestions"){
  const target=date.parse(input.date),requestId=z.string().uuid().parse(input.requestId);const result=suggestMeals(rows,target,{excludeIds:z.array(z.string().max(100)).max(5000).default([]).parse(input.excludeIds),seed:z.string().max(100).default(requestId).parse(input.seed)});
- const writes=[];for(const s of result.suggestions){const id=await stableId(requestId+"/"+s.id);const data=schemas.meal_event.parse({recipeId:s.id,type:"recommended",occurredOn:day,week:weekOf(target)});writes.push(db.prepare("INSERT OR IGNORE INTO records (id,kind,data,version,updated_at,updated_by) VALUES (?,'meal_event',?,1,?,?)").bind(id,JSON.stringify(data),now,user));}if(writes.length)await db.batch(writes);return result;
+ const writes=[];for(const s of result.suggestions){const id=await stableId(requestId+"/"+s.id);const data=schemas.meal_event.parse({recipeId:s.id,type:"recommended",occurredOn:day,week:weekOf(target)});writes.push(db.prepare("INSERT OR IGNORE INTO records (id,kind,data,version,updated_at,updated_by) VALUES (?,'meal_event',?,1,?,?)").bind(id,JSON.stringify(data),now,user));}if(writes.length)await db.batch(writes);return {...result,leftoverOptions:leftoverOptions(rows,target)};
+ }
+ if(input.action==="plan_leftovers"){
+ const target=date.parse(input.date),requestId=z.string().uuid().parse(input.requestId);const option=leftoverOptions(rows,target).find(m=>m.id===input.sourceMealId);if(!option)throw new Error("That earlier meal is no longer available for leftovers. Refresh the picker.");if(option.version!==input.sourceVersion)throw new Error("Conflict: the earlier meal changed. Refresh the picker.");const source=rows.find(r=>r.kind==="meal"&&r.id===option.id)!;const meal=schemas.meal.parse(leftoverMeal(source,target,now));
+ await db.prepare("INSERT OR IGNORE INTO records (id,kind,data,version,updated_at,updated_by) VALUES (?,'meal',?,1,?,?)").bind(requestId,JSON.stringify(meal),now,user).run();return {ok:true,id:requestId};
  }
  if(input.action==="plan_recipe"){
  const target=date.parse(input.date),requestId=z.string().uuid().parse(input.requestId);const recipe=rows.find(r=>r.kind==="recipe"&&r.id===input.recipeId);if(!recipe)throw new Error("Recipe no longer available");const profile=foodProfileSchema.parse(rows.find(r=>r.kind==="settings")?.data.foodProfile??{});const signals=recipeSignals(recipe.data,profile);
