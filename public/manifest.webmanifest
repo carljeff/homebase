@@ -1,0 +1,1 @@
+{"name": "Homebase", "short_name": "Homebase", "start_url": "/", "display": "standalone", "background_color": "#f6f5ef", "theme_color": "#294c42", "icons": [{"src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"}]}
