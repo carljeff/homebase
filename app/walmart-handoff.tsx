@@ -1,44 +1,47 @@
 "use client";
-import {useEffect,useMemo,useState} from "react";
-
-import {type Grocery,type Preference,preferenceKey,emptyPreference,productUrl,searchUrl,readPreferences,selectedGroceries,prepareHandoff} from "../lib/walmart";
-const KEY="homebase:walmart:preferences:v1";
-const validUrl=(value:string)=>Boolean(productUrl(value));
-export function WalmartHandoff({groceries}:{groceries:Grocery[]}){
- const [prefs,setPrefs]=useState<Record<string,Preference>>({});
- const [selected,setSelected]=useState<Record<string,boolean>>({});
- const [quantities,setQuantities]=useState<Record<string,number>>({});
- const [review,setReview]=useState(false);
- const eligible=useMemo(()=>groceries.filter(g=>!g.data.checked&&!g.data.pantry),[groceries]);
- useEffect(()=>{
- // Browser storage is loaded after hydration; no household records are changed.
- // eslint-disable-next-line react-hooks/set-state-in-effect
- try{const saved=JSON.parse(localStorage.getItem(KEY)||"{}");setPrefs(readPreferences(JSON.stringify(saved)));}catch{}},[]);
- const save=(name:string,patch:Partial<Preference>)=>{const key=preferenceKey(name);setPrefs(current=>{const next={...current,[key]:{...(current[key]??emptyPreference()),...patch}};try{localStorage.setItem(KEY,JSON.stringify(next));}catch{}return next;});};
- const chosen=selectedGroceries(groceries,selected);
- const [notice,setNotice]=useState("");
- const exportMock=()=>{try{const batch=prepareHandoff(groceries,selected,quantities,prefs);const url=URL.createObjectURL(new Blob([JSON.stringify(batch,null,2)],{type:"application/json"}));const a=document.createElement("a");a.href=url;a.download="homebase-walmart-mock.json";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);setNotice("Mock batch exported. No cart changes.");}catch(e){setNotice(e instanceof Error?e.message:"Export failed");}};
- const openProduct=(g:Grocery)=>{const url=prefs[preferenceKey(g.data.name)]?.url;window.open(productUrl(url||"")||searchUrl(g.data.name),"_blank","noopener,noreferrer");};
- const copyList=async()=>{const text=chosen.map(g=>`${g.data.quantityKnown===false?"review":g.data.quantity} ${g.data.unit||""} ${g.data.name}`).join("\n");try{await navigator.clipboard.writeText(text);}catch{window.prompt("Copy your shopping list",text);}};
- return <section className="card" aria-label="Walmart shopping handoff" style={{marginBottom:20}}>
-  <div className="section-head"><div><h2>Walmart shopping handoff</h2><p className="muted">Free, manual handoff preview. Nothing is added to your cart automatically.</p></div><button className="button" onClick={()=>setReview(v=>!v)}>{review?"Hide review":"Send to Walmart"}</button></div>
-  <p><a className="button" href="/walmart-mock/index.html" target="_blank" rel="noopener noreferrer">Try supervised mock shopping</a></p>
-  {review&&<div style={{display:"grid",gap:12}}>
-   <p className="muted">Review products and quantities. Save exact Walmart product URLs to avoid searching again. Links open Walmart in your own signed-in browser. Cart automation is not enabled.</p>
-   {eligible.map(g=>{const key=preferenceKey(g.data.name),p=prefs[key]||emptyPreference();return <div key={g.id} style={{borderTop:"1px solid var(--border, #ddd)",paddingTop:12,display:"grid",gap:7}}>
-    <label><input type="checkbox" checked={selected[g.id]!==false} onChange={e=>setSelected(s=>({...s,[g.id]:e.target.checked}))}/> <strong>{g.data.name}</strong></label>
-    <label>Walmart packages (review separately from recipe units) <input type="number" min="1" max="99" step="1" style={{width:90}} value={quantities[g.id]??""} onChange={e=>setQuantities(q=>({...q,[g.id]:Number(e.target.value)}))}/> <small>Grocery need: {g.data.quantityKnown===false?"needs review":g.data.quantity} {g.data.unit||""}</small></label>
-    <label>Preferred Walmart product URL <input aria-label={g.data.name+" Walmart product URL"} placeholder="https://www.walmart.com/ip/..." style={{width:"100%",maxWidth:560}} value={p.url} onChange={e=>save(g.data.name,{url:e.target.value})}/></label>
-    {p.url&&!validUrl(p.url)&&<small role="alert">Use a valid https://www.walmart.com product URL.</small>}
-    <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-     <input aria-label={g.data.name+" preferred brand"} placeholder="Preferred brand" value={p.brand} onChange={e=>save(g.data.name,{brand:e.target.value})}/>
-     <input aria-label={g.data.name+" preferred package size"} placeholder="Package size" value={p.size} onChange={e=>save(g.data.name,{size:e.target.value})}/>
-     <button className="button" onClick={()=>openProduct(g)}>{p.url&&validUrl(p.url)?"Open saved product":"Search Walmart"}</button>
-    </div>
-   </div>})}
-   {!eligible.length&&<p className="muted">No unchecked groceries to send.</p>}
-   <p role="status">{notice}</p><div className="button-row"><button className="button" onClick={exportMock} disabled={!chosen.length}>Export supervised mock batch</button><button className="button" onClick={copyList} disabled={!chosen.length}>Copy selected list ({chosen.length})</button><a className="button" href="https://www.walmart.com/cart" target="_blank" rel="noopener noreferrer">Review Walmart cart</a></div>
-   <small className="muted">Preferences are stored only in this browser for now, not shared across household devices. Prices and stock are not verified. Opening a product does not mark groceries as purchased.</small>
-  </div>}
+import {useState} from 'react';
+import {preferenceKey,productUrl,searchUrl,selectedGroceries,readPreferences,type Grocery} from '../lib/walmart';
+import {shoppingReview,type WalmartProduct,type ProductRow,type ShoppingItem} from '../lib/walmart-catalog';
+const blank=(name:string):WalmartProduct=>({itemName:name,productName:'',url:'',brand:'',size:'',defaultPackages:1,alternativeName:'',alternativeUrl:'',maxPrice:null,allowSubstitutions:false,saturatedFat:null,notes:''});
+type Action=(payload:unknown,message?:string)=>Promise<boolean>;
+export function WalmartHandoff({groceries,products,action,busy}:{groceries:Grocery[];products:ProductRow[];action:Action;busy:boolean}){
+ const [review,setReview]=useState(false),[selected,setSelected]=useState<Record<string,boolean>>({}),[quantities,setQuantities]=useState<Record<string,number>>({});
+ const [editor,setEditor]=useState<{record?:ProductRow;data:WalmartProduct}|null>(null),[notice,setNotice]=useState(''),[prepared,setQueue]=useState<ShoppingItem[]|null>(null),[preparedKey,setPreparedKey]=useState(''),[opened,setOpened]=useState<Record<string,boolean>>({}),[handled,setHandled]=useState<Record<string,boolean>>({});
+ const eligible=selectedGroceries(groceries,{}),chosen=selectedGroceries(groceries,selected);
+ const summary=shoppingReview(groceries,selected,quantities,products);
+ const queue=preparedKey===JSON.stringify(summary.ready)&&summary.attention.length===0?prepared:null;
+ function edit(g:Grocery){const record=products.find(p=>preferenceKey(p.data.itemName)===preferenceKey(g.data.name));let data=record?{...record.data}:blank(g.data.name);if(!record){try{const old=readPreferences(localStorage.getItem('homebase:walmart:preferences:v1'))[preferenceKey(g.data.name)];if(old?.url){data={...data,productName:g.data.name,url:old.url,brand:old.brand,size:old.size};}}catch{/* Browser-local drafts are optional. */}}setEditor({record,data});setNotice('');}
+ async function save(){if(!editor)return;if(!editor.data.productName.trim()||!productUrl(editor.data.url)){setNotice('Enter a product name and exact Walmart product link.');return;}const ok=await action({action:'save',kind:'walmart_product',id:editor.record?.id,version:editor.record?.version,data:editor.data},'Saved product for the household');if(ok){setEditor(null);setQuantities({});setQueue(null);setNotice('Saved for both adults. Review this trip’s package count below.');}}
+ function change<K extends keyof WalmartProduct>(key:K,value:WalmartProduct[K]){setEditor(e=>e?{...e,data:{...e.data,[key]:value}}:null);}
+ async function copy(){if(!queue)return;const text=queue.map(p=>`${p.quantity} package(s): ${p.name}${p.size?' · '+p.size:''}\n${p.url}`).join('\n\n');try{await navigator.clipboard.writeText(text);setNotice('Prepared shopping list copied. Nothing was added to Walmart.');}catch{setNotice('Clipboard unavailable. Use the product links below.');}}
+ return <section className="card walmart-shopping" aria-label="Walmart shopping" style={{marginBottom:20}}>
+ <div className="section-head"><div><h2>Shop your list at Walmart</h2><p className="muted">Choose products once. Reuse your household’s saved matches each week.</p></div><button className="button" onClick={()=>{setReview(!review);setQueue(null);}}> {review?'Hide review':'Send to Walmart'}</button></div>
+ {review&&<><p>Saved products are shared. Check package counts for this trip, then prepare your shopping links. You’ll add products and check out in Walmart.</p>
+ <button className="button" onClick={()=>{const usual:Record<string,number>={};for(const g of chosen){const p=products.find(p=>preferenceKey(p.data.itemName)===preferenceKey(g.data.name));if(p)usual[g.id]=p.data.defaultPackages;}setQuantities(usual);setQueue(null);}}>Use usual package counts</button><p className="muted">{chosen.length} selected · {summary.ready.length} ready · {summary.attention.length} need attention. Prices, stock, nutrition and store availability are not verified.</p>
+ {eligible.map(g=>{const p=products.find(p=>preferenceKey(p.data.itemName)===preferenceKey(g.data.name));const problem=summary.attention.find(a=>a.id===g.id);return <article className="walmart-item" key={g.id}>
+ <label><input type="checkbox" checked={selected[g.id]!==false} onChange={e=>{setSelected(s=>({...s,[g.id]:e.target.checked}));setQueue(null);}}/> <b>{g.data.name}</b></label>
+ <p className="muted">Grocery need: {g.data.quantityKnown===false?'Quantity needs review':`${g.data.quantity} ${g.data.unit||''}`}</p>
+ {p?<><strong>{p.data.productName}</strong><p>{[p.data.brand,p.data.size].filter(Boolean).join(' · ')}</p>{p.data.maxPrice!==null&&<small>Your price limit: ${p.data.maxPrice.toFixed(2)} per package — check in Walmart</small>}{/popcorn/i.test(g.data.name)&&<p className="muted">Saturated fat: {p.data.saturatedFat===null?'not recorded; check the label':`${p.data.saturatedFat}g per serving (entered by household)`}. Prefer 0–1g; your chosen product stays selected.</p>}{p.data.alternativeName&&<p className="muted">Alternative: {p.data.alternativeName}. {p.data.allowSubstitutions?'Review before substituting.':'Ask before substituting.'}</p>}</>:<p>No saved product yet. Search Walmart once, then save the exact product link and package size.</p>}
+ <div className="button-row"><button className="button" onClick={()=>edit(g)}>{p?'Change saved product':'Choose product'}</button><a className="button" href={searchUrl(g.data.name)} target="_blank" rel="noopener noreferrer">Search Walmart</a>{p&&<a className="button" href={p.data.url} target="_blank" rel="noopener noreferrer">View saved product</a>}</div>
+ <label>Packages for this trip <input aria-label={g.data.name+' package count'} type="number" min="1" max="99" step="1" value={quantities[g.id]??''} onChange={e=>{setQuantities(q=>({...q,[g.id]:Number(e.target.value)}));setQueue(null);}}/></label>{p&&<button className="text-link" onClick={()=>{setQuantities(q=>({...q,[g.id]:p.data.defaultPackages}));setQueue(null);}}>Use usual count ({p.data.defaultPackages})</button>}
+ {problem&&<small className="muted">{problem.reason}</small>}
+ </article>;})}
+ {!eligible.length&&<p>No unchecked groceries to shop for.</p>}
+ <button className="button primary" disabled={!summary.ready.length||summary.attention.length>0} onClick={()=>{setQueue(summary.ready);setPreparedKey(JSON.stringify(summary.ready));setOpened({});setHandled({});setNotice('Shopping links prepared. No products have been added to a cart.');}}>Prepare shopping links ({summary.ready.length})</button>
+ {summary.attention.length>0&&<p className="muted">Resolve items needing attention or uncheck them to continue.</p>}
+ {queue&&<section className="walmart-queue" aria-label="Prepared Walmart shopping list"><h3>Your Walmart shopping links</h3><p>Open each saved product, add the shown package count in Walmart, then mark it reviewed here. These checkboxes only track this handoff; they never mark groceries purchased.</p><p>{queue.filter(p=>handled[p.url]).length} of {queue.length} reviewed in Walmart</p>
+ {queue.map(p=><article className="walmart-item" key={p.url}><b>{p.quantity} package{p.quantity===1?'':'s'} · {p.name}</b><p>{p.size}</p>{p.maxPrice!==null&&<small>Your limit: ${p.maxPrice.toFixed(2)} per package; check in Walmart.</small>}{p.notes&&<p>{p.notes}</p>}<a className="button" href={p.url} target="_blank" rel="noopener noreferrer" onClick={()=>setOpened(s=>({...s,[p.url]:true}))}>{opened[p.url]?'Reopen product':'Open product in Walmart'}</a>{opened[p.url]&&<small> Link opened — cart contents unconfirmed.</small>}<label><input type="checkbox" checked={!!handled[p.url]} onChange={e=>setHandled(s=>({...s,[p.url]:e.target.checked}))}/> I reviewed this item in Walmart</label></article>)}
+ <div className="button-row"><button className="button" onClick={copy}>Copy prepared list</button><a className="button" href="https://www.walmart.com/cart" target="_blank" rel="noopener noreferrer">Review Walmart cart</a></div><p className="muted">Use your preferred store in Walmart and review prices, fulfillment and substitutions there. Reopening a product does not add it again automatically.</p></section>}
+ </>}
+ {editor&&<section className="walmart-editor" aria-label="Edit saved Walmart product"><h3>Save a household product for {editor.data.itemName}</h3><p className="muted">Copy the link from the exact Walmart product page. You and Lindsay will share this choice.</p>
+ <label>Product name<input value={editor.data.productName} onChange={e=>change('productName',e.target.value)}/></label><label>Walmart product link<input type="url" value={editor.data.url} onChange={e=>change('url',e.target.value)}/></label>
+ <label>Brand<input value={editor.data.brand} onChange={e=>change('brand',e.target.value)}/></label><label>Package size<input placeholder="e.g. half gallon / 64 fl oz" value={editor.data.size} onChange={e=>change('size',e.target.value)}/></label>
+ <label>Usual package count<input type="number" min="1" max="99" step="1" value={editor.data.defaultPackages} onChange={e=>change('defaultPackages',Number(e.target.value))}/></label>
+ <label>Optional price limit per package ($)<input type="number" min="0.01" step="0.01" value={editor.data.maxPrice??''} onChange={e=>change('maxPrice',e.target.value===''?null:Number(e.target.value))}/></label>
+ <label>Acceptable alternative<input value={editor.data.alternativeName} onChange={e=>change('alternativeName',e.target.value)}/></label><label>Alternative product link (optional)<input type="url" value={editor.data.alternativeUrl} onChange={e=>change('alternativeUrl',e.target.value)}/></label>
+ <label><input type="checkbox" checked={editor.data.allowSubstitutions} onChange={e=>change('allowSubstitutions',e.target.checked)}/> Substitutions allowed, with review in Walmart</label>
+ <label>Saturated fat per serving (g, from label; optional)<input type="number" min="0" step="0.1" value={editor.data.saturatedFat??''} onChange={e=>change('saturatedFat',e.target.value===''?null:Number(e.target.value))}/></label><label>Shopping notes<textarea value={editor.data.notes} onChange={e=>change('notes',e.target.value)}/></label>
+ <div className="button-row"><button className="button primary" disabled={busy} onClick={save}>Save for household</button><button className="button" disabled={busy} onClick={()=>setEditor(null)}>Cancel</button></div></section>}
+ <p role="status">{notice}</p>
  </section>;
 }

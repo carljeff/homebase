@@ -1,5 +1,5 @@
 /** Phase 1 only. Vault storage and retrieval are deliberately not implemented. */
-export const ordinaryKinds=['recipe','meal','grocery','project','date','highlight','settings','meal_event','family','wishlist'] as const;
+export const ordinaryKinds=['recipe','meal','grocery','project','date','highlight','settings','meal_event','family','wishlist','walmart_product'] as const;
 const reserved=/^(vault.*|secretvalue|secretfields|ciphertext|encryptedvalue|encrypteddata|encryptionkey|passportnumber|knowntravelernumber|driverslicensenumber|insurance(memberid|groupnumber|policynumber)|socialsecuritynumber|ssn|recoverycodes)$/i;
 function reservedKey(key:string){return reserved.test(key.replace(/[^a-z0-9]/gi,''));}
 export function assertOrdinaryInput(input:unknown):void{
