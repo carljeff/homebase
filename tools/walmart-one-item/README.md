@@ -25,3 +25,7 @@ To update without losing the local attempt history, replace the files inside the
 ## Version 0.1.2 — retry recovery
 
 If a prior action is locked but you refreshed Walmart's cart and verified the exact product is absent: Inspect the product, choose “Item absent from cart? Unlock retry”, and confirm the absence check. This only unlocks that product; it does not add anything. Inspect again, review the product, and approve separately. The recovery retains the previous status locally and rechecks the active product. Uncertain actions remain locked without this explicit recovery. Adapter results that guarantee no click now record `not_clicked` and do not require recovery; earlier stored `blocked` results are also retryable. Never clear all extension storage merely to retry.
+
+## Version 0.1.3 — popup recovery repair
+
+The popup now displays its running version. Recovery identifies the product without requiring a matched Add to cart button. A visible, explicit cart-absence checkbox replaces the native confirmation dialog. Inspecting an identified product may therefore allow recovery even when adding remains blocked. Recovery itself never invokes the add action; a separate inspection and approval is required afterward. Automated popup tests cover the checkbox, blocked-button recovery, version display, separate add consent and invalid-page failures. Real Chrome/Walmart behavior is still user-tested.

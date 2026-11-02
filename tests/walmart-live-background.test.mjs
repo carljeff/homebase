@@ -22,7 +22,7 @@ test('confirmed no-click block permits a fresh approval while uncertain attempts
 test('recovery requires explicit absence confirmation and fresh matching product inspection, then separate add approval',async()=>{
  store={'attempt:123':{status:'uncertain'}};clicks=0;const inject=chrome.scripting.executeScript;
  await send({...message,type:'recover-one',confirmedAbsent:false});await settle();assert.equal(store['attempt:123'].status,'uncertain');assert.equal(clicks,0);
- chrome.scripting.executeScript=async opts=>{assert.deepEqual(opts.args,['inspect']);return [{result:{status:'ready',snapshot:message.snapshot}}];};
+ chrome.scripting.executeScript=async opts=>{assert.deepEqual(opts.args,['identify']);return [{result:{status:'ready',snapshot:message.snapshot}}];};
  const result=await send({...message,type:'recover-one',confirmedAbsent:true});await settle();assert.equal(result.status,'unlocked');assert.equal(store['attempt:123'].status,'cleared');assert.equal(store['attempt:123'].previousStatus,'uncertain');assert.equal(clicks,0);
  chrome.scripting.executeScript=inject;assert.equal((await send(message)).status,'click_sent_verify_manually');await settle();assert.equal(clicks,1);
 });

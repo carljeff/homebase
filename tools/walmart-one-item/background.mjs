@@ -13,7 +13,7 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
   const previous=(await chrome.storage.local.get(key))[key];
   if(message.type==='recover-one'){
    if(message.confirmedAbsent!==true)throw Error('Confirm that you refreshed Walmart cart and this exact item is absent.');
-   const check=(await chrome.scripting.executeScript({target:{tabId},func:almondMilkAction,args:['inspect']}))?.[0]?.result;
+   const check=(await chrome.scripting.executeScript({target:{tabId},func:almondMilkAction,args:['identify']}))?.[0]?.result;
    if(check?.status!=='ready'||check.snapshot.id!==snapshot.id||check.snapshot.title!==snapshot.title)throw Error('Product changed or cannot be inspected. Nothing was unlocked.');
    await chrome.storage.local.set({[key]:{status:'cleared',at:new Date().toISOString(),previousStatus:previous?.status||'none',confirmedAbsent:true}});
    return {status:'unlocked',reason:'Unlocked only. Inspect the product again and approve a new attempt separately.'};

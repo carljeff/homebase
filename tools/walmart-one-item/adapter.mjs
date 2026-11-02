@@ -1,7 +1,8 @@
 // Self-contained because Chrome serializes this function into the active tab.
 // No network calls, account access, checkout, stealth, or challenge bypass.
 export function almondMilkAction(action='inspect',expected=null){
- const fail=reason=>({status:'blocked',reason});
+ let snapshot=null;
+ const fail=reason=>({status:'blocked',reason,...(snapshot?{snapshot}:{})});
  if(window.top!==window)return fail('Use the main Walmart product page.');
  const url=new URL(location.href);
  if(url.protocol!=='https:'||!['walmart.com','www.walmart.com'].includes(url.hostname)||url.username||url.password||url.port)return fail('Open an HTTPS Walmart product page.');
@@ -13,6 +14,8 @@ export function almondMilkAction(action='inspect',expected=null){
  const titles=[...document.querySelectorAll('h1')].filter(visible);
  if(titles.length!==1||!/\balmond\s*milk\b/i.test(text(titles[0])))return fail('Could not identify one almond milk product heading.');
  const title=text(titles[0]);
+ snapshot={id:match[1],title,url:'https://www.walmart.com/ip/'+match[1],quantity:1};
+ if(action==='identify')return {status:'ready',snapshot};
  // Quantity controls mean the product may already be in the cart. Fail closed.
  if([...document.querySelectorAll('button,input,select')].filter(visible).some(el=>/increase quantity|decrease quantity|remove from cart|quantity in cart/i.test(text(el))))return fail('A cart quantity control is visible. Review the cart manually first.');
  const quantities=[...document.querySelectorAll('input,select')].filter(el=>visible(el)&&(el.getAttribute('type')==='number'||/quantity|qty|number of/i.test(el.getAttribute('aria-label')||'')));
@@ -28,7 +31,6 @@ export function almondMilkAction(action='inspect',expected=null){
  };
  const buttons=[...document.querySelectorAll('button')].filter(el=>visible(el)&&inView(el)&&!el.disabled&&el.getAttribute('aria-disabled')!=='true'&&addButton(el));
  if(buttons.length!==1)return fail(buttons.length?'Multiple Add to cart buttons are in view. Scroll until only the main product button is visible, then inspect again. Nothing was clicked.':'No supported Add to cart button is in view. Keep the main product button visible and inspect again. Nothing was clicked.');
- const snapshot={id:match[1],title,url:'https://www.walmart.com/ip/'+match[1],quantity:1};
  if(action==='inspect')return {status:'ready',snapshot};
  if(action!=='add'||!expected||expected.id!==snapshot.id||expected.title!==snapshot.title||expected.url!==snapshot.url||expected.quantity!==1)return fail('Product changed. Inspect and review it again.');
  buttons[0].click();
