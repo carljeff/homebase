@@ -10,10 +10,9 @@ export function WalmartHandoff({groceries}:{groceries:Grocery[]}){
  const [prefs,setPrefs]=useState<Record<string,Preference>>({});
  const [selected,setSelected]=useState<Record<string,boolean>>({});
  const [quantities,setQuantities]=useState<Record<string,number>>({});
- const [ready,setReady]=useState(false);
  const [review,setReview]=useState(false);
  const eligible=useMemo(()=>groceries.filter(g=>!g.data.checked&&!g.data.pantry),[groceries]);
- useEffect(()=>{try{const saved=JSON.parse(localStorage.getItem(KEY)||"{}");if(saved&&typeof saved==="object"&&!Array.isArray(saved))setPrefs(saved);}catch{}setReady(true);},[]);
+ useEffect(()=>{try{const saved=JSON.parse(localStorage.getItem(KEY)||"{}");if(saved&&typeof saved==="object"&&!Array.isArray(saved))setPrefs(saved);}catch{}},[]);
  const save=(name:string,patch:Partial<Preference>)=>{const key=name.trim().toLowerCase();setPrefs(current=>{const next={...current,[key]:{url:"",brand:"",size:"",alternative:"",maxPrice:"",allowSubstitutions:false,...current[key],...patch}};try{localStorage.setItem(KEY,JSON.stringify(next));}catch{}return next;});};
  const chosen=eligible.filter(g=>selected[g.id]!==false);
  const openProduct=(g:Grocery)=>{const url=prefs[g.data.name.trim().toLowerCase()]?.url;window.open(url&&validUrl(url)?url:searchUrl(g.data.name),"_blank","noopener,noreferrer");};
