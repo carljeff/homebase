@@ -1,4 +1,5 @@
 import {z} from 'zod';
+import {conversionUnits} from './walmart-matching';
 import {productUrl,preferenceKey,selectedGroceries,validPackages,type Grocery} from './walmart.ts';
 const productLink=z.string().max(2000).refine(v=>productUrl(v)!==null,'Use an exact HTTPS Walmart product link').transform(v=>productUrl(v)!);
 export const walmartProductSchema=z.object({
@@ -6,8 +7,9 @@ export const walmartProductSchema=z.object({
  brand:z.string().max(200).default(''),size:z.string().max(200).default(''),defaultPackages:z.number().int().min(1).max(99).default(1),
  alternativeName:z.string().max(1000).default(''),alternativeUrl:z.union([z.literal(''),productLink]).default(''),
  maxPrice:z.number().positive().max(10000).nullable().default(null),allowSubstitutions:z.boolean().default(false),
+ packageAmount:z.number().positive().max(1000000).nullable().optional(),packageUnit:z.enum(conversionUnits).nullable().optional(),
  saturatedFat:z.number().nonnegative().max(100).nullable().default(null),notes:z.string().max(4000).default('')
-});
+}).refine(d=>(d.packageAmount==null)===(d.packageUnit==null),'Enter both package amount and unit, or leave both empty');
 export type WalmartProduct=z.infer<typeof walmartProductSchema>;
 export type ProductRow={id:string;version:number;data:WalmartProduct};
 export type ShoppingItem={url:string;name:string;quantity:number;sourceNames:string[];size:string;maxPrice:number|null;notes:string};
