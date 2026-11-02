@@ -27,3 +27,13 @@ This release reduces repeated searching. It does not populate a real cart automa
 ## Next validation
 
 On iPhone/iPad and Mac, save the actual products for unsweetened almond milk, Lemon Spindrift, keto bread, plantain chips and low-saturated-fat popcorn. Confirm brand/size, package counts and the preferred store on Walmart. On the second adult's device, refresh and verify the same saved choices appear. Time a five-item handoff and compare against manual searching. Actual cart addition is performed by the shopper. Future cart-population providers must be evaluated separately, remain modular and free unless approved, and demonstrate real end-to-end behavior before being offered as reliable automation.
+
+## Guided shopping and link-first editing
+
+The prepared handoff now shows one product at a time with package count, size, notes and optional price limit. Open in Walmart opens the exact saved link. Reviewed → Next records only the shopper's review, Skip leaves an item for later, Previous allows revisiting, and the end screen links to the first skipped item and Walmart cart. The underlying grocery review is hidden during guided shopping; Edit shopping list returns to it. No cart contents are read or written.
+
+Reviewed/skipped position is saved in this browser. After reload, use Resume saved shopping trip to restore the prepared selection/counts and current item. Restoration rechecks the grocery-list identity and the current product/quantity snapshot. Changed products or counts require a fresh review; new generated grocery IDs start a different trip. Start guided shopping explicitly starts new progress. Browser storage failures are reported without blocking manual product links. Trip progress is device-local; household product links remain durable and shared.
+
+The product editor now starts with the Walmart URL. When a valid product URL contains a readable title slug and the product name is empty, it suggests a name. Suggest name from link can explicitly replace an existing name. Numeric-only URLs yield no guess. Suggestions are unverified and require user review before household save. Brand, size, nutrition, price and stock are not fetched or inferred from the URL; this version makes no requests to Walmart pages. Unsupported page extraction is not a prerequisite for the shopping flow.
+
+Validation includes React DOM tests of next/skip/previous-style navigation, remount restoration and stale-trip rejection; URL suggestion tests, corrupt-storage handling, household catalog regression tests, TypeScript, focused lint and production build. These are synthetic DOM checks, not real mobile browser or Walmart-cart verification. Managed browser preview remains unavailable in this environment.
