@@ -17,8 +17,17 @@ export function almondMilkAction(action='inspect',expected=null){
  if([...document.querySelectorAll('button,input,select')].filter(visible).some(el=>/increase quantity|decrease quantity|remove from cart|quantity in cart/i.test(text(el))))return fail('A cart quantity control is visible. Review the cart manually first.');
  const quantities=[...document.querySelectorAll('input,select')].filter(el=>visible(el)&&(el.getAttribute('type')==='number'||/quantity|qty|number of/i.test(el.getAttribute('aria-label')||'')));
  if(quantities.some(el=>Number(el.value)!==1))return fail('Set the product package quantity to exactly one on Walmart first.');
- const buttons=[...document.querySelectorAll('button')].filter(el=>visible(el)&&!el.disabled&&el.getAttribute('aria-disabled')!=='true'&&/^add to cart$/i.test(text(el)));
- if(buttons.length!==1)return fail('Could not identify one unambiguous Add to cart button. Nothing was clicked.');
+ // Only consider unobstructed buttons actually in the user's viewport.
+ const inView=el=>{const r=el.getBoundingClientRect();const width=window.innerWidth,height=window.innerHeight;if(r.width<=0||r.height<=0||r.bottom<=0||r.right<=0||r.top>=height||r.left>=width)return false;const x=(Math.max(0,r.left)+Math.min(width,r.right))/2,y=(Math.max(0,r.top)+Math.min(height,r.bottom))/2;const hit=document.elementFromPoint(x,y);return Boolean(hit&&(hit===el||el.contains(hit)));};
+ const addButton=el=>{
+  const label=(el.textContent||'').replace(/\s+/g,' ').trim(),aria=(el.getAttribute('aria-label')||'').replace(/\s+/g,' ').trim();
+  // Walmart may append the product name to its accessible label.
+  const detailed=aria.match(/^add to cart\s*[-–—:,]\s*(.+)$/i);
+  if(detailed&&detailed[1].toLowerCase()!==title.toLowerCase())return false;
+  return /^add to cart$/i.test(label)||/^add to cart$/i.test(aria);
+ };
+ const buttons=[...document.querySelectorAll('button')].filter(el=>visible(el)&&inView(el)&&!el.disabled&&el.getAttribute('aria-disabled')!=='true'&&addButton(el));
+ if(buttons.length!==1)return fail(buttons.length?'Multiple Add to cart buttons are in view. Scroll until only the main product button is visible, then inspect again. Nothing was clicked.':'No supported Add to cart button is in view. Keep the main product button visible and inspect again. Nothing was clicked.');
  const snapshot={id:match[1],title,url:'https://www.walmart.com/ip/'+match[1],quantity:1};
  if(action==='inspect')return {status:'ready',snapshot};
  if(action!=='add'||!expected||expected.id!==snapshot.id||expected.title!==snapshot.title||expected.url!==snapshot.url||expected.quantity!==1)return fail('Product changed. Inspect and review it again.');

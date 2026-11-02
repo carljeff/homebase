@@ -15,3 +15,9 @@ An attempt record is stored locally before any click and automatic retry is bloc
 Agent identification: the product name/version are in manifest.json. This helper does not disguise automation or answer identity prompts; stop if Walmart requests agent identification that this version cannot supply. Current Walmart Agentic Access Terms must be respected; no term acceptance is automated. Terms reviewed in this task: https://www.walmart.com/help/article/walmart-agentic-access-terms/d048fc229d7549738d7c05a4317e24d7 (October 21, 2026 version).
 
 Automated tests cover synthetic DOM inspection, strict product checks, changed products, challenges, ambiguous buttons, consent, one-package limits, pre-click persistence, concurrent actions and uncertain outcomes. Actual Chrome/Walmart compatibility remains to be tested by the user. No Homebase deployment is necessary to install this helper.
+
+## Version 0.1.1
+
+Button matching now checks the rendered Add to cart text as well as an exact accessibility label. Only buttons intersecting the viewport and unobstructed at their visible center qualify. Offscreen recommendations are excluded; multiple qualifying buttons still block the action. This addresses two plausible causes of the first user-reported mismatch, but the screenshot alone does not establish Walmart's DOM structure. Chrome/Walmart verification remains user-supervised.
+
+To update without losing the local attempt history, replace the files inside the extension folder you previously loaded, then open chrome://extensions and click its Reload button. Refresh the Walmart product tab before inspecting it again. Do not uninstall simply to retry a previous uncertain click.
