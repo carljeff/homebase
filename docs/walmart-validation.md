@@ -48,3 +48,7 @@ Walmart published Agentic Access Terms dated October 21, 2026:
 https://www.walmart.com/help/article/walmart-agentic-access-terms/d048fc229d7549738d7c05a4317e24d7
 
 The current terms describe direct browser agents as well as a separate Agent Gateway; they require informed consent, truthful agent identification, respect for consent gates/customer preferences and no evasion of safeguards. They do not establish that this prototype is a verified Walmart integration. A future live adapter must verify the then-current requirements and technical feasibility. This work does not accept terms, connect an account, or enable live actions. User approval remains required before account connection, real cart changes or deployment. No checkout functionality exists.
+
+## Live mock rehearsal release
+
+User authorized publishing the prototype for testing on November 2. The hosted rehearsal is now included in `public/walmart-mock`, linked from Kitchen → Groceries. A Load sample batch button avoids local server or file setup. The same tested runner permits only the exact same-origin synthetic product fixture; Walmart domains remain rejected. Reset clears only mock rehearsal browser storage. No database migrations, account integration or real cart actions were added. Previous deployed Site version 9 is retained as the rollback point; restoring code does not undo subsequent household data edits.

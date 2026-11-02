@@ -22,6 +22,7 @@ export function WalmartHandoff({groceries}:{groceries:Grocery[]}){
  const copyList=async()=>{const text=chosen.map(g=>`${g.data.quantityKnown===false?"review":g.data.quantity} ${g.data.unit||""} ${g.data.name}`).join("\n");try{await navigator.clipboard.writeText(text);}catch{window.prompt("Copy your shopping list",text);}};
  return <section className="card" aria-label="Walmart shopping handoff" style={{marginBottom:20}}>
   <div className="section-head"><div><h2>Walmart shopping handoff</h2><p className="muted">Free, manual handoff preview. Nothing is added to your cart automatically.</p></div><button className="button" onClick={()=>setReview(v=>!v)}>{review?"Hide review":"Send to Walmart"}</button></div>
+  <p><a className="button" href="/walmart-mock/index.html" target="_blank" rel="noopener noreferrer">Try supervised mock shopping</a></p>
   {review&&<div style={{display:"grid",gap:12}}>
    <p className="muted">Review products and quantities. Save exact Walmart product URLs to avoid searching again. Links open Walmart in your own signed-in browser. Cart automation is not enabled.</p>
    {eligible.map(g=>{const key=preferenceKey(g.data.name),p=prefs[key]||emptyPreference();return <div key={g.id} style={{borderTop:"1px solid var(--border, #ddd)",paddingTop:12,display:"grid",gap:7}}>

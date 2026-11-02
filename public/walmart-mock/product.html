@@ -1,0 +1,8 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Mock Walmart product</title><h2 id="name">Mock product</h2>
+<div data-product-id="">Local rehearsal product</div><label>Packages <input data-mock-quantity type="number" min="1" max="99" value="1"></label><button data-mock-add>Add to mock cart</button><p data-mock-receipt role="status"></p>
+<script type="module">
+const params=new URLSearchParams(location.search);document.getElementById('name').textContent=params.get('name')||'Mock product';document.querySelector('[data-product-id]').setAttribute('data-product-id',params.get('id')||'');
+if(params.get('state')==='unavailable')document.querySelector('button').disabled=true;
+if(params.get('state')==='challenge')document.body.setAttribute('data-challenge','true');
+document.querySelector('button').onclick=()=>{const q=document.querySelector('input').value;const r=document.querySelector('[data-mock-receipt]');r.setAttribute('data-quantity',q);r.textContent=q+' packages confirmed in this mock page only.';};
+</script></html>

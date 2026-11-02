@@ -1,6 +1,6 @@
 // Deliberately mock-only. This module has no network or Walmart permissions.
 export class SupervisedRunner {
- constructor(load,ledger={},save=()=>{}) {this.load=load;this.ledger=ledger;this.save=save;this.state='paused';this.results=[];this.busy=false;}
+ constructor(load,ledger={},save=()=>{},fixture={origin:'http://127.0.0.1:8765',path:'/product.html'}) {this.fixture=fixture;this.load=load;this.ledger=ledger;this.save=save;this.state='paused';this.results=[];this.busy=false;}
  pause(){if(this.state!=='stopped')this.state='paused';}
  resume(){if(this.state!=='stopped')this.state='ready';}
  stop(){this.state='stopped';}
@@ -15,7 +15,7 @@ export class SupervisedRunner {
    const page=await this.load(item);
    if(this.state!=='ready')return 'paused';
    const location=new URL(page.url);
-   if(location.origin!=='http://127.0.0.1:8765'||location.pathname!=='/product.html')throw Error('Live pages are disabled');
+   if(/(^|\.)walmart\.com$/.test(location.hostname)||location.origin!==this.fixture.origin||location.pathname!==this.fixture.path||!this.fixture.path.endsWith('/product.html'))throw Error('Live pages are disabled');
    const doc=page.document;
    if(doc.querySelector('[data-challenge]'))return 'needs_manual_review';
    if(doc.querySelector('[data-product-id]')?.getAttribute('data-product-id')!==url.pathname.split('/').pop())return 'product_mismatch';

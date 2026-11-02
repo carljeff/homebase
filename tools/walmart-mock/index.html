@@ -1,7 +1,7 @@
 <!doctype html><html lang="en"><meta charset="utf-8"><title>Homebase supervised Walmart mock</title>
 <style>body{font:18px system-ui;max-width:950px;margin:30px auto;padding:15px}button,input{font:inherit;margin:6px;padding:8px}iframe{width:100%;height:280px;border:2px solid #687}pre{white-space:pre-wrap}</style>
-<h1>Supervised shopping rehearsal</h1><p>Mock products only. This workflow cannot open Walmart or change a real cart. Keep this window visible. Package quantities are separate from recipe quantities.</p>
-<label>Homebase mock batch <input id="file" type="file" accept=".json"></label><p id="item"></p>
+<h1>Supervised shopping rehearsal</h1><p>Mock products only. No setup required: click Load sample batch to start. This workflow cannot open Walmart or change a real cart. Keep this window visible. Package quantities are separate from recipe quantities.</p>
+<label>Homebase mock batch <input id="file" type="file" accept=".json"></label><button id="sample">Load sample batch</button><button id="reset">Reset mock rehearsal</button><p id="item"></p>
 <button id="resume">Resume</button><button id="pause">Pause</button><button id="stop">Stop</button><button id="next" disabled>Approve this mock item</button>
 <p role="status" id="status">Import a mock batch to begin.</p><iframe title="Mock product page" id="product" src="about:blank"></iframe><pre id="results"></pre>
 <script type="module" src="./ui.mjs"></script></html>
