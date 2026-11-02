@@ -21,3 +21,7 @@ Automated tests cover synthetic DOM inspection, strict product checks, changed p
 Button matching now checks the rendered Add to cart text as well as an exact accessibility label. Only buttons intersecting the viewport and unobstructed at their visible center qualify. Offscreen recommendations are excluded; multiple qualifying buttons still block the action. This addresses two plausible causes of the first user-reported mismatch, but the screenshot alone does not establish Walmart's DOM structure. Chrome/Walmart verification remains user-supervised.
 
 To update without losing the local attempt history, replace the files inside the extension folder you previously loaded, then open chrome://extensions and click its Reload button. Refresh the Walmart product tab before inspecting it again. Do not uninstall simply to retry a previous uncertain click.
+
+## Version 0.1.2 — retry recovery
+
+If a prior action is locked but you refreshed Walmart's cart and verified the exact product is absent: Inspect the product, choose “Item absent from cart? Unlock retry”, and confirm the absence check. This only unlocks that product; it does not add anything. Inspect again, review the product, and approve separately. The recovery retains the previous status locally and rechecks the active product. Uncertain actions remain locked without this explicit recovery. Adapter results that guarantee no click now record `not_clicked` and do not require recovery; earlier stored `blocked` results are also retryable. Never clear all extension storage merely to retry.

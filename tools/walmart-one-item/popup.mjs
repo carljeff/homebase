@@ -1,6 +1,6 @@
 import {almondMilkAction} from './adapter.mjs';
 const $=id=>document.getElementById(id);let selected=null,busy=false;
-function render(){ $('approve').disabled=busy||!selected||!$('consent').checked; }
+function render(){ $('recover').disabled=busy||!selected; $('approve').disabled=busy||!selected||!$('consent').checked; }
 $('consent').onchange=render;
 $('inspect').onclick=async()=>{
  selected=null;$('consent').checked=false;busy=true;render();
@@ -15,4 +15,13 @@ $('approve').onclick=async()=>{
  try{const result=await chrome.runtime.sendMessage({type:'approve-one',...selected,approved:true});$('status').textContent=result?.status==='click_sent_verify_manually'?'Add click sent. Open Walmart’s cart and confirm the exact product and quantity. No checkout was attempted.':result?.reason||'Outcome uncertain. Check your Walmart cart manually; do not retry.';
  }catch(e){$('status').textContent='Outcome uncertain: '+e.message+' Check Walmart manually.';}
  finally{selected=null;busy=false;render();$('inspect').disabled=false;}
+};
+
+$('recover').onclick=async()=>{
+ if(busy||!selected)return;
+ if(!confirm('Refresh your Walmart cart first and confirm this EXACT product is absent. Unlock a new attempt? This button does not add anything.'))return;
+ busy=true;render();$('inspect').disabled=true;
+ try{const result=await chrome.runtime.sendMessage({type:'recover-one',...selected,approved:true,confirmedAbsent:true});$('status').textContent=result?.reason||'Could not unlock. No add was requested.';}
+ catch(e){$('status').textContent=e.message;}
+ finally{selected=null;$('consent').checked=false;busy=false;$('inspect').disabled=false;render();}
 };

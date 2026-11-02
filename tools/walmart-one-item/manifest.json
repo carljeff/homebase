@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Homebase supervised almond milk test",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "User-approved, single-package almond milk test. No checkout or background browsing.",
   "permissions": ["activeTab", "scripting", "storage"],
   "action": {"default_popup": "popup.html"},
