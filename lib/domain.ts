@@ -1,3 +1,4 @@
+import {walmartProductSchema} from "./walmart-catalog.ts";
 import {familySchema,wishlistSchema} from "./family.ts";
 import { foodProfileSchema } from "./meal-profile.ts";
 import { z } from "zod";
@@ -5,6 +6,7 @@ const short=z.string().trim().min(1).max(1000), note=z.string().max(150000).defa
 const revision=z.object({savedAt:z.string(),recipe:z.record(z.unknown())});
 const ingredient=z.object({name:short,quantity:z.number().nonnegative().max(10000),unit:z.string().max(40).default(""),category:z.string().max(80).default("Other"),raw:z.string().max(10000).optional(),quantityKnown:z.boolean().optional()});
 export const schemas={
+ walmart_product:walmartProductSchema,
  family:familySchema,
  wishlist:wishlistSchema,
  recipe:z.object({title:short,description:note,favorite:z.boolean().default(false),servings:z.number().int().min(1).max(100),minutes:z.number().int().min(0).max(2880),ingredients:z.array(ingredient).max(1000),instructions:note,tags:z.array(z.string().max(1000)).max(200).default([]),notes:note,likes:z.array(z.string().max(80)).max(20).default([]),revisions:z.array(revision).max(25).default([])}),
