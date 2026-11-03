@@ -1,3 +1,4 @@
+import {growthOperation} from "./growth-store";
 import {saveWalmartProduct} from "./walmart-store";
 import {assertOrdinaryInput} from "./vault-boundary";
 import {familySave,assertFamilyDelete,ensureProfiles} from "./family-store";
@@ -9,6 +10,7 @@ import { list,save,remove } from "./store";
 import { consolidate,type Kind } from "./domain";
 export async function operate(input:any,user:string){
  assertOrdinaryInput(input);
+ if(["save_family_measurement","archive_family_measurement","restore_family_measurement"].includes(input.action))return growthOperation(input,user);
  if(input.action==="ensure_family"||(input.action==="save"&&input.kind==="settings"&&input.data?.familyOperation?.action==="ensure_profiles"))return ensureProfiles(input.profiles?input:input.data.familyOperation,user);
  if(["meal_suggestions","plan_recipe","plan_leftovers","meal_feedback"].includes(input.action))return mealOperation(input,user);
  const op=z.enum(["list","save","delete","generate_groceries","import_recipes"]).parse(input.action);
