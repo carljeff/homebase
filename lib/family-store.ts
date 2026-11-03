@@ -11,7 +11,8 @@ export async function familySave(kind:string,data:any,user:string,id?:string,ver
   if(prior&&prior.data.profileId!==parsed.profileId)throw new Error('Gift recipient cannot be changed');
   return save('wishlist',parsed,user,id,version);
  }
- const parsed=familySchema.parse(data);
+ const parsed=familySchema.parse(prior&&!Object.hasOwn(data,'measurements')?{...data,measurements:prior.data.measurements??[]}:data);
+ const settings=rows.find(r=>r.kind==='settings');const today=new Intl.DateTimeFormat('en-CA',{timeZone:settings?.data.timezone??'America/Indiana/Indianapolis',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());if(parsed.measurements.some(m=>m.date>today))throw Error('Measurement date cannot be in the future');
  if(rows.some(r=>r.kind==='family'&&r.id!==id&&r.data.name.trim().toLowerCase()===parsed.name.toLowerCase()))throw new Error('A profile with that name already exists');
  if(id)return save('family',parsed,user,id,version);
  // A name-derived ID makes repeated initializations/concurrent creates idempotent.
