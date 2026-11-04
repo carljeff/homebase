@@ -1,3 +1,7 @@
+# Publication status
+
+Deployed with approval as Homebase v21 on November 4, 2026. The owner enrolled successfully through the authenticated Homebase connector, and existing Friends records exactly matched the predeployment baseline. Household audience, relay audience, Mac pairing, keys, mappings and schedule were unchanged. Actual other-account sign-in was not performed; denial checks use synthetic owner/other-account identities across the real handlers and components.
+
 # Friends: one private owner
 
 The Friends feature is now restricted to one configured Site owner. Other household adults retain shared Kitchen, recipes, groceries, projects, Family, settings and their existing wishlist privacy behavior, but do not receive Friends records, source labels, activity snapshots or collector management access.
