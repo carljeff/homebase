@@ -18,6 +18,7 @@ export function metadata(s){
  return true;
 }
 function response(status,value={error:'Metadata request rejected'}){return Response.json(value,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});}
+function reject(status,code){console.warn('crm_relay '+code);return response(status,{error:'Metadata request rejected',code});}
 export async function handle(request,env,forward=fetch,now=Date.now()){
  try{
  const url=new URL(request.url);
@@ -27,14 +28,15 @@ export async function handle(request,env,forward=fetch,now=Date.now()){
  if(request.method!=='POST')return response(405);
  if(!request.headers.get('content-type')?.includes('application/json')||request.headers.has('content-encoding'))return response(415);
  const id=request.headers.get('x-crm-device')||'',time=request.headers.get('x-crm-time')||'',signature=request.headers.get('x-crm-signature')||'';
- if(!uuid.test(id)||!/^\d{10}$/.test(time)||Math.abs(now-Number(time)*1000)>300000||!/^[a-f0-9]{64}$/.test(signature))return response(401);
- if(!/^[a-f0-9]{64}$/.test(env.CRM_RELAY_MASTER||'')||!env.HOMEBASE_ACCESS_TOKEN||!env.DB)return response(503);
+ if(!uuid.test(id)||!/^\d{10}$/.test(time)||!/^[a-f0-9]{64}$/.test(signature))return reject(401,'AUTH_HEADERS_INVALID');
+ if(Math.abs(now-Number(time)*1000)>300000)return reject(401,'AUTH_CLOCK_OUTSIDE_WINDOW');
+ if(!/^[a-f0-9]{64}$/.test(env.CRM_RELAY_MASTER||'')||!env.HOMEBASE_ACCESS_TOKEN||!env.DB)return reject(503,'SERVER_CONFIGURATION');
  if(Number(request.headers.get('content-length')||0)>1000000)return response(413);
  const reader=request.body?.getReader();if(!reader)return response(400);
  let size=0;const parts=[];for(;;){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>1000000){await reader.cancel();return response(413);}parts.push(value);}
  const body=new Uint8Array(size);let at=0;for(const p of parts){body.set(p,at);at+=p.length;}
  const digest=hex(await crypto.subtle.digest('SHA-256',body));const expected=await mac(await deviceKey(env.CRM_RELAY_MASTER,id),'POST\n'+PATH+'\n'+time+'\n'+digest);
- let mismatch=0;for(let i=0;i<64;i++)mismatch|=signature.charCodeAt(i)^expected.charCodeAt(i);if(mismatch)return response(401);
+ let mismatch=0;for(let i=0;i<64;i++)mismatch|=signature.charCodeAt(i)^expected.charCodeAt(i);if(mismatch)return reject(401,'SIGNATURE_MISMATCH');
  let data;try{data=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(body));}catch{return response(400);}
  if(!metadata(data)||data.deviceId!==id||Date.parse(data.generatedAt)>now+300000)return response(400);
  // Only verified devices consume a persistent quota. One fixed row per device, no activity payload storage.
@@ -43,9 +45,9 @@ export async function handle(request,env,forward=fetch,now=Date.now()){
  if(!quota.meta.changes)return response(429);
  const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),20000);let upstream;
  try{upstream=await forward(TARGET,{method:'POST',redirect:'manual',signal:controller.signal,headers:{'Content-Type':'application/json','OAI-Sites-Authorization':'Bearer '+env.HOMEBASE_ACCESS_TOKEN,'X-CRM-Device':id,'X-CRM-Time':time,'X-CRM-Signature':signature},body});}finally{clearTimeout(timeout);}
- if(!upstream.ok)return response([400,401,409,413,429].includes(upstream.status)?upstream.status:503);
+ if(!upstream.ok)return reject([400,401,409,413,429].includes(upstream.status)?upstream.status:503,'UPSTREAM_HTTP_'+upstream.status);
  const ack=await upstream.json();if(!exact(ack,'accepted sequence digest duplicate')||ack.accepted!==true||ack.sequence!==data.sequence||ack.digest!==digest||typeof ack.duplicate!=='boolean')return response(502);
  return response(200,ack);
- }catch{return response(503);}
+ }catch{return reject(503,'RELAY_INTERNAL');}
 }
 export default {fetch:(request,env)=>handle(request,env)};
