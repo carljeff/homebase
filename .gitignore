@@ -63,3 +63,11 @@ Copy_Me_That*
 *.key
 *.p12
 *.pfx
+
+# Mac Messages collector: never commit runtime mappings, cache, logs or Python caches.
+__pycache__/
+*.pyc
+tools/messages-crm/config.json
+tools/messages-crm/metadata.sqlite*
+tools/messages-crm/*.log
+tools/messages-crm/AUTOMATION_APPROVED

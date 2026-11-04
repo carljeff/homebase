@@ -1,0 +1,4 @@
+import {getChatGPTUser} from '../../../chatgpt-auth';
+import {registerCollector,revokeCollector} from '../../../../lib/crm-store';
+export const dynamic='force-dynamic';
+export async function POST(request:Request){const user=await getChatGPTUser();if(!user)return Response.json({error:'Sign in required'},{status:401});if(request.headers.get('origin')!==new URL(request.url).origin)return Response.json({error:'Origin not allowed'},{status:403});try{const body=await request.text();if(body.length>2000)throw Error();const p=JSON.parse(body);if(p.action==='revoke'){await revokeCollector(user.userId,p.deviceId);return Response.json({ok:true});}if(p.action!=='register')throw Error();return Response.json(await registerCollector(user.userId,p.label),{headers:{'Cache-Control':'no-store'}});}catch{return Response.json({error:'Could not update collector; check signing configuration or revoke the existing device first'},{status:400});}}
