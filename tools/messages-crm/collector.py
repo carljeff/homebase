@@ -301,7 +301,8 @@ def transmit(body, config):
 
 def main():
     parser = argparse.ArgumentParser(description='Read-only, metadata-only Homebase Messages collector')
-    parser.add_argument('command', choices=['diagnose', 'dry-run', 'sync', 'health', 'credentials'])
+    parser.add_argument('command', choices=['diagnose', 'dry-run', 'sync', 'health', 'credentials', 'export'])
+    parser.add_argument('--output', default=os.path.expanduser('~/Downloads/homebase-messages-metadata.json'))
     parser.add_argument('--config', default=os.path.join(BASE, 'config.json'))
     parser.add_argument('--confirm-manual-sync', action='store_true')
     parser.add_argument('--scheduled', action='store_true')
@@ -345,6 +346,18 @@ def run_collector(args, config, directory):
             info = collect(source, db, config, force=True)
             data = snapshot(db, config)
             info.update(data['quality']); stamps = db.execute('SELECT min(stamp),max(stamp) FROM messages').fetchone(); info['earliestUTC'] = utc(stamps[0]) if stamps[0] else None; info['latestUTC'] = utc(stamps[1]) if stamps[1] else None; info['matchedContacts'] = sum(c['direct']['incoming'] + c['direct']['outgoing'] + c['group']['incoming'] + c['group']['outgoing'] > 0 for c in data['contacts']); print(json.dumps(info, sort_keys=True)); return
+        if args.command == 'export':
+            collect(source, db, config, force=True)
+            data = snapshot(db, config)
+            data['sequence'] = max(data['sequence'], int(get_meta(db, 'export_sequence', '0')) + 1)
+            output = os.path.abspath(os.path.expanduser(args.output))
+            # Exclusive creation prevents overwriting source, configuration or existing exports.
+            fd = os.open(output, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(fd, 'w') as out:
+                json.dump(data, out, sort_keys=True, separators=(',', ':'))
+            put_meta(db, 'export_sequence', data['sequence']); db.commit()
+            print('Metadata export created privately. No network request made. Upload only through Homebase Friends; existing files are never overwritten.')
+            return
         pending = get_meta(db, 'pending')
         if not pending:
             collect(source, db, config, force=args.reconcile)

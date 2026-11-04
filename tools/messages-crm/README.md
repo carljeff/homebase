@@ -1,11 +1,8 @@
-# Homebase Messages metadata collector
+# Homebase Messages metadata export
 
-Read-only High Sierra local tools. Installation is disabled by default. No message bodies, previews or attachments are selected or sent. Raw handles are matched locally to approved Homebase contact UUIDs. Secrets belong in login Keychain, never configuration.
+Use `collector.py export --output "$HOME/Downloads/homebase-messages.json"` after installation, then select the JSON in Homebase Friends and confirm the preview. Export is local-only, mode 600, contains only approved activity metadata, and never overwrites an existing file. Existing configuration is preserved by installation. Use a new filename for each export. No signing key, service token, network access or launchd activation is needed for this workflow.
 
-Run `python manage.py install` using High Sierra's `/usr/bin/python`, then use the installed collector's `diagnose` and `dry-run` commands. These stages do not transmit data. Production deployment, service credentials and real manual synchronization require the separate review described in the runbook. `manage.py enable --approve-automation` is a later explicit step and requires a successful manual sync.
-
-Full instructions, architecture, security, permission review, rollback and limitations:
+Full installation, import, privacy and rollback instructions:
 https://github.com/carljeff/homebase/blob/feat/friend-crm-messages/docs/friend-crm/MAC_SETUP.md
-https://github.com/carljeff/homebase/blob/feat/friend-crm-messages/docs/friend-crm/README.md
 
-No command here modifies the Messages database or sends a text. A real High Sierra run, SQLite schema/epoch validation, Keychain/curl/launchd checks and reboot verification remain pending; synthetic tests on modern Python do not establish those outcomes.
+Direct automatic uploading remains unsupported on the current hosting setup. Do not run credentials, sync or enable for this manual workflow. Do not share config.json, chat.db, secrets or exports in chat/GitHub.

@@ -109,4 +109,21 @@ class FailureAndPrivacyTest(unittest.TestCase):
         process=subprocess.run([os.sys.executable,str(Path(c.__file__)),'dry-run','--config',path],text=True,capture_output=True)
         self.assertNotEqual(process.returncode,0);self.assertNotIn('PRIVATE_',process.stdout+process.stderr)
 
+class ManualExportTest(unittest.TestCase):
+    setUp = CollectorTest.setUp
+    tearDown = CollectorTest.tearDown
+    def test_export_is_private_local_only_and_never_overwrites(self):
+        from unittest import mock
+        import contextlib, io
+        path=os.path.join(self.temp.name,'config.json');Path(path).write_text(json.dumps({'database':self.path,'device_id':self.config['device_id'],'endpoint':c.EXPECTED_ENDPOINT,'contacts':[{'contact_id':A,'handles':['+13175550101']}]}));os.chmod(path,0o600)
+        output=os.path.join(self.temp.name,'export.json');before=Path(self.path).read_bytes();self.cache.close()
+        with mock.patch.object(c,'Source',return_value=self.source),mock.patch.object(c,'transmit',side_effect=AssertionError('No export network')),mock.patch.object(c.sys,'argv',['collector.py','export','--config',path,'--output',output]),contextlib.redirect_stdout(io.StringIO()):
+            c.main();payload=json.loads(Path(output).read_text());self.assertEqual(payload['sequence'],1);self.assertEqual(os.stat(output).st_mode & 0o777,0o600)
+            for forbidden in ['PRIVATE_', '13175550101', 'example.test', 'guid-']:self.assertNotIn(forbidden,Path(output).read_text())
+            self.assertEqual(before,Path(self.path).read_bytes())
+            with self.assertRaises(OSError):c.main()
+        output2=os.path.join(self.temp.name,'second.json')
+        with mock.patch.object(c,'Source',return_value=self.source),mock.patch.object(c.sys,'argv',['collector.py','export','--config',path,'--output',output2]),contextlib.redirect_stdout(io.StringIO()):c.main()
+        self.assertEqual(json.loads(Path(output2).read_text())['sequence'],2)
+
 if __name__=='__main__':unittest.main()

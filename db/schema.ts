@@ -16,5 +16,5 @@ export const importedRecipes=sqliteTable("imported_recipes",{
 
 // Scoped machine ingestion state: signing keys derive from a runtime secret, never D1.
 export const crmDevices=sqliteTable('crm_devices',{
- id:text('id').primaryKey().notNull(),ownerId:text('owner_id').notNull(),label:text('label').notNull(),enabled:integer('enabled').notNull().default(1),sequence:integer('sequence').notNull().default(0),digest:text('digest').notNull().default(''),snapshotJson:text('snapshot_json'),lastSuccessAt:text('last_success_at'),createdAt:text('created_at').notNull()
+ id:text('id').primaryKey().notNull(),ownerId:text('owner_id').notNull(),sourceMode:text("source_mode").notNull().default("signed"),label:text('label').notNull(),enabled:integer('enabled').notNull().default(1),sequence:integer('sequence').notNull().default(0),digest:text('digest').notNull().default(''),snapshotJson:text('snapshot_json'),lastSuccessAt:text('last_success_at'),createdAt:text('created_at').notNull()
 },t=>[uniqueIndex('crm_one_active_owner').on(t.ownerId).where(sql`${t.enabled}=1`)]);

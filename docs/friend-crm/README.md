@@ -1,3 +1,7 @@
+# Current status: manual import supported
+
+The supported hosted workflow is now Mac collector `export` → signed-in Friends file preview → explicit metadata import. It needs no Mac credentials or platform bypass token. The platform does not expose a supported Mac pairing credential flow; direct unattended syncing remains unavailable and disabled. See MAC_SETUP.md first. Existing architectural notes below describe the legacy signed endpoint, not a working unattended hosting setup.
+
 # Friend CRM Messages integration — implementation and validation
 
 Status: prepared for review. **Not deployed; no real Mac database read, credential provisioning, live synchronization or launchd activation was performed.** The real-data and reboot portions of the definition of done remain pending user approval and device validation.

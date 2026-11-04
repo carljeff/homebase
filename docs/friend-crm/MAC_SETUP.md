@@ -1,3 +1,25 @@
+# Current supported workflow: manual metadata export/import
+
+**Use this section instead of the legacy signing-key, service-token and sync instructions below. No credentials or automatic sync are needed for manual import.**
+
+Update the disabled local tools using the download/unzip/install commands in section 1 below. Existing config.json and local mappings are preserved. Do not revoke or recreate your existing device: the export uses the device_id already configured on the Mac. New installations can use their own UUID; the first approved import registers it to the signed-in account. Never share a configuration/device between adults.
+
+Run through Termius:
+
+```sh
+/usr/bin/python "$HOME/Library/Application Support/HomebaseMessagesCRM/collector.py" export --output "$HOME/Downloads/homebase-messages-$(date +%Y%m%d-%H%M%S).json"
+```
+
+This performs a fresh read-only metadata reconciliation and creates a new mode-600 file. It never calls the network, Keychain or launchd, never overwrites an existing output file and does not mark a successful sync. Source Messages data and local mappings remain unchanged. Only contact UUIDs, counts, dates and quality flags leave the collector; the export contains no message bodies, previews, attachments, raw handles or credentials. The file is still private relationship metadata.
+
+Open Homebase on the Mac using your browser/VNC, or transfer this one export to your own iPad using an existing trusted file-transfer method. In Friends → Import Mac messaging metadata, choose the JSON file, review the preview, then click Confirm metadata import. Do not upload chat.db, config.json or SQL dumps. Do not paste the export into chat or commit it to GitHub. Remove your local export when no longer needed.
+
+All contacts in a file must correspond to existing friends with messaging opt-in enabled. The file device ID must match the active collector for the signed-in account; another adult cannot import your device. Revoked devices are rejected. Exact repeated imports are acknowledged without adding counts. Newer files replace the entire source snapshot, allowing deletion reconciliation. Older exports are rejected; generate a fresh export if needed. An existing source switches to manual mode on its first import; signed direct ingestion is then rejected. Each adult's source remains separate and is never summed together. Export sequences are independent of direct-upload pending state; do not alternate export/import with legacy signed sync.
+
+Verify one friend's direct and group totals and last-contact dates in Homebase. Import the same file again: Homebase should say already imported and totals should not change. This is a manual upload, not automatic synchronization. Do not run launchd enable or the legacy sync command. Device revocation clears its hosted snapshot; it does not delete Mac exports. The additive source_mode migration preserves existing household data.
+
+---
+
 # Mac mini local validation and later activation
 
 These commands run on the Mac through Termius as your usual Messages account. No direct Mac access was assumed. No production deployment or automatic sync is authorized by installing this package.
