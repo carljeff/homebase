@@ -57,6 +57,12 @@ def main():
         import sqlite3
         db = sqlite3.connect(os.path.join(BASE, 'metadata.sqlite'))
         success = db.execute("SELECT value FROM meta WHERE key='last_success'").fetchone()
+        relay_success = db.execute("SELECT value FROM meta WHERE key='relay_manual_success'").fetchone()
+        with open(os.path.join(BASE, 'config.json')) as src:
+            config = json.load(src)
+        if config.get('endpoint') != 'https://homebase-messages-relay.carl-jeff.chatgpt.site/api/crm/ingest' or not relay_success:
+            db.close()
+            raise RuntimeError('A verified manual relay sync is required before scheduling')
         pending = db.execute("SELECT value FROM meta WHERE key='pending'").fetchone()
         db.close()
         if not success or pending:

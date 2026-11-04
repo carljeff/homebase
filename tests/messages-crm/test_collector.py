@@ -126,4 +126,23 @@ class ManualExportTest(unittest.TestCase):
         with mock.patch.object(c,'Source',return_value=self.source),mock.patch.object(c.sys,'argv',['collector.py','export','--config',path,'--output',output2]),contextlib.redirect_stdout(io.StringIO()):c.main()
         self.assertEqual(json.loads(Path(output2).read_text())['sequence'],2)
 
+class RelayPairTest(unittest.TestCase):
+    setUp = CollectorTest.setUp
+    tearDown = CollectorTest.tearDown
+    def test_pair_preserves_mapping_and_snapshot_resets_pending_only_and_needs_no_network(self):
+        from unittest import mock
+        import contextlib, io
+        config={'database':self.path,'device_id':self.config['device_id'],'endpoint':c.EXPECTED_ENDPOINT,'contacts':[{'contact_id':A,'handles':['+13175550101']}]}
+        path=os.path.join(self.temp.name,'config.json');Path(path).write_text(json.dumps(config));os.chmod(path,0o600)
+        c.put_meta(self.cache,'pending','old');c.put_meta(self.cache,'last_success','old');self.cache.commit();self.cache.close();before=Path(self.path).read_bytes()
+        with mock.patch.object(c,'Source',return_value=self.source),mock.patch.object(c,'transmit',side_effect=AssertionError('No network during pair')),mock.patch.object(c.getpass,'getpass',return_value='a'*64),mock.patch.object(c,'keychain_write') as write,mock.patch.object(c.sys,'argv',['collector.py','pair','--config',path,'--base-sequence','7']),contextlib.redirect_stdout(io.StringIO()):c.main()
+        write.assert_called_once_with(c.SIGNING_SERVICE,'a'*64);updated=json.loads(Path(path).read_text());self.assertEqual(updated['contacts'],config['contacts']);self.assertEqual(updated['device_id'],config['device_id']);self.assertEqual(updated['endpoint'],c.RELAY_ENDPOINT);self.assertNotIn('a'*64,Path(path).read_text());self.assertEqual(before,Path(self.path).read_bytes())
+        self.cache=c.cache_open(os.path.join(self.temp.name,'metadata.sqlite'));self.assertEqual(c.get_meta(self.cache,'sequence'),'7');self.assertIsNone(c.get_meta(self.cache,'pending'));self.assertIsNone(c.get_meta(self.cache,'last_success'))
+    def test_relay_transmission_never_reads_or_sends_sites_token(self):
+        from unittest import mock
+        payload=json.dumps({'sequence':1});digest=hashlib.sha256(payload.encode()).hexdigest();process=mock.Mock();process.returncode=0;process.communicate.return_value=(json.dumps({'accepted':True,'sequence':1,'digest':digest,'duplicate':False}).encode(),b'')
+        config={'endpoint':c.RELAY_ENDPOINT,'device_id':self.config['device_id']}
+        with mock.patch.object(c,'keychain_read',return_value='a'*64) as read,mock.patch.object(c.subprocess,'Popen',return_value=process) as launch:
+            c.transmit(payload,config);read.assert_called_once_with(c.SIGNING_SERVICE);stdin=process.communicate.call_args[0][0];self.assertNotIn(b'OAI-Sites-Authorization',stdin);self.assertNotIn('a'*64,' '.join(launch.call_args[0][0]));self.assertEqual(launch.call_args[0][0][-1],c.RELAY_ENDPOINT)
+
 if __name__=='__main__':unittest.main()

@@ -1,3 +1,7 @@
+# Latest: authenticated upload relay
+
+An explicitly approved separate public Site now serves a single signed metadata intake route. Its source is tools/messages-crm/relay. The platform access token stays in that relay's runtime secret store and is forwarded only to the fixed private Homebase ingestion endpoint. Homebase's audience is preserved. Per-device relay keys are derived from a separate shared server-only master and issued only to the signed-in source owner. See MAC_SETUP.md first. Historical manual-only limitations below are superseded by the relay; automatic scheduling still requires a real successful manual relay upload and explicit activation.
+
 # Current status: manual import supported
 
 The supported hosted workflow is now Mac collector `export` → signed-in Friends file preview → explicit metadata import. It needs no Mac credentials or platform bypass token. The platform does not expose a supported Mac pairing credential flow; direct unattended syncing remains unavailable and disabled. See MAC_SETUP.md first. Existing architectural notes below describe the legacy signed endpoint, not a working unattended hosting setup.

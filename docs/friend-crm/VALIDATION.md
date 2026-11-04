@@ -1,3 +1,11 @@
+# Authenticated relay update — November 4, 2026
+
+Local tests: 88 application tests (including synthetic Python collector → relay → private ingestion, repeat acknowledgement, owner authorization, mode switches and revocation), 14 Python collector/installer tests, and 4 standalone relay security/rate-limit tests. TypeScript and focused lint passed. Production builds are executed by publication. Prior full-repository lint issues remain unchanged.
+
+No real Mac pairing/upload or scheduled job has been performed by the agent. Real manual upload, subsequent retry, login Keychain/TLS behavior, and scheduling/reboot/CPU/SSH/VNC/SMS checks remain pending. Synthetic live probes use a random unregistered device and must be rejected without writing Homebase contacts or snapshots. Relay rate counters can record that synthetic UUID; no real contact data is used.
+
+The new Site's public audience is explicitly approved; Homebase's household audience is unchanged. Only server-side runtime secrets hold the platform credential and relay master. No credentials or real contact records are in code or the installer ZIP. Relay stores only fixed per-device rate counters. Platform access-token lifecycle is a maintenance dependency and not proven permanent.
+
 # Manual import update — November 4, 2026
 
 Executed on the deployment checkout: 86 application tests passed; 12 Python collector/installer tests passed; TypeScript and focused lint passed. Production build is recorded by the publishing workflow. Tests cover strict preview/schema filtering, confirmation, duplicate imports, owner boundaries, contact opt-in, old snapshots, revoked devices, additive replacement, signed/manual source separation, export permissions, no-network export and unchanged synthetic Messages source.

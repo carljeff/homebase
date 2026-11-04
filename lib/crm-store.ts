@@ -6,6 +6,8 @@ type Device={source_mode:string;id:string;owner_id:string;label:string;enabled:n
 const encoder=new TextEncoder();
 function master(){const value=(env as unknown as Record<string,unknown>).CRM_INGEST_MASTER_KEY;if(typeof value!=='string'||!/^\w{64,256}$/.test(value))throw Error('Collector signing is not configured');return value;}
 async function mac(secret:string,value:string){const key=await crypto.subtle.importKey('raw',encoder.encode(secret),{name:'HMAC',hash:'SHA-256'},false,['sign']);return Array.from(new Uint8Array(await crypto.subtle.sign('HMAC',key,encoder.encode(value))),b=>b.toString(16).padStart(2,'0')).join('');}
+function relayMaster(){const value=(env as unknown as Record<string,unknown>).CRM_RELAY_MASTER;if(typeof value!=='string'||!/^([a-f0-9]{64})$/.test(value))throw Error('Relay signing is not configured');return value;}
+export const relayDeviceSecret=(id:string)=>mac(relayMaster(),'homebase-crm-relay-v1:'+id);
 export const deviceSecret=(id:string)=>mac(master(),'homebase-crm-v1:'+id);
 export async function bodyDigest(body:string){return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',encoder.encode(body))),b=>b.toString(16).padStart(2,'0')).join('');}
 export async function registerCollector(user:string,label:string){master();const id=crypto.randomUUID(),now=new Date().toISOString();const existing=await env.DB!.prepare('SELECT * FROM crm_devices WHERE owner_id=? AND enabled=1').bind(user).first<Device>();if(existing)throw Error('Revoke the existing collector before creating another');await env.DB!.prepare('INSERT INTO crm_devices (id,owner_id,label,created_at) VALUES (?,?,?,?)').bind(id,user,z.string().trim().min(1).max(80).parse(label),now).run();return {deviceId:id,signingKey:await deviceSecret(id)};}
@@ -20,14 +22,14 @@ export async function ingestMessaging(request:Request,now=Date.now()){
  const id=request.headers.get('x-crm-device')||'',stamp=request.headers.get('x-crm-time')||'',signature=request.headers.get('x-crm-signature')||'';
  if(!z.string().uuid().safeParse(id).success||!/^\d{10}$/.test(stamp)||Math.abs(now-Number(stamp)*1000)>300000||!/^\w{64}$/.test(signature))return fail(401);
  const d=await env.DB!.prepare('SELECT * FROM crm_devices WHERE id=? AND enabled=1').bind(id).first<Device>();if(!d||d.source_mode==='manual')return fail(401);
- const digest=await bodyDigest(body),expected=await mac(await deviceSecret(id),'POST\n/api/crm/ingest\n'+stamp+'\n'+digest);
+ const digest=await bodyDigest(body),expected=await mac(await (d.source_mode==='relay'?relayDeviceSecret(id):deviceSecret(id)),'POST\n/api/crm/ingest\n'+stamp+'\n'+digest);
  let diff=0;for(let i=0;i<64;i++)diff|=expected.charCodeAt(i)^signature.charCodeAt(i);if(diff)return fail(401);
  let snapshot:MessagingSnapshot;try{snapshot=messagingSnapshotSchema.parse(JSON.parse(body));}catch{return fail(400);}
  if(snapshot.deviceId!==id||Date.parse(snapshot.generatedAt)>now+300000||snapshot.reconciledAt>snapshot.generatedAt)return fail(400);
  if(snapshot.sequence===d.sequence&&digest===d.digest)return Response.json({accepted:true,sequence:d.sequence,digest,duplicate:true},{headers:{'Cache-Control':'no-store'}});
  if(snapshot.sequence!==d.sequence+1)return fail(409);
  const contacts=(await list()).filter(r=>r.kind==='friend'&&r.data.trackMessaging);if(snapshot.contacts.some(c=>!contacts.some(r=>r.id===c.contactId)))return fail(400);
- const result=await env.DB!.prepare('UPDATE crm_devices SET sequence=?,digest=?,snapshot_json=?,last_success_at=? WHERE id=? AND sequence=? AND enabled=1').bind(snapshot.sequence,digest,JSON.stringify(snapshot),new Date(now).toISOString(),id,d.sequence).run();if(!result.meta.changes)return fail(409);
+ const result=await env.DB!.prepare('UPDATE crm_devices SET sequence=?,digest=?,snapshot_json=?,last_success_at=? WHERE id=? AND sequence=? AND enabled=1 AND source_mode=?').bind(snapshot.sequence,digest,JSON.stringify(snapshot),new Date(now).toISOString(),id,d.sequence,d.source_mode).run();if(!result.meta.changes)return fail(409);
  return Response.json({accepted:true,sequence:snapshot.sequence,digest,duplicate:false},{headers:{'Cache-Control':'no-store'}});
 }
 
@@ -39,6 +41,7 @@ export async function importMessagingSnapshot(user:string,input:unknown,now=Date
  const digest=await bodyDigest(JSON.stringify(snapshot));
  let device=await env.DB!.prepare('SELECT * FROM crm_devices WHERE id=?').bind(snapshot.deviceId).first<Device>();
  if(device&&(device.owner_id!==user||!device.enabled))throw Error('This collector is revoked or belongs to another account');
+ if(device?.source_mode==='relay')throw Error('Switch this collector to manual mode before importing');
  if(device?.snapshot_json){
   const prior=messagingSnapshotSchema.parse(JSON.parse(device.snapshot_json));
   if(device.digest===digest)return {accepted:true,duplicate:true,contacts:snapshot.contacts.length};
@@ -54,4 +57,14 @@ export async function importMessagingSnapshot(user:string,input:unknown,now=Date
  const result=await env.DB!.prepare("UPDATE crm_devices SET sequence=?,digest=?,snapshot_json=?,last_success_at=?,source_mode='manual',label='Mac mini · manual import' WHERE id=? AND owner_id=? AND enabled=1 AND sequence=? AND digest=?").bind(snapshot.sequence,digest,JSON.stringify(snapshot),new Date(now).toISOString(),snapshot.deviceId,user,device.sequence,device.digest).run();
  if(!result.meta.changes)throw Error('Import changed concurrently; refresh before retrying');
  return {accepted:true,duplicate:false,contacts:snapshot.contacts.length};
+}
+
+export async function prepareRelay(user:string,id:string){
+ z.string().uuid().parse(id);const signingKey=await relayDeviceSecret(id);
+ const row=await env.DB!.prepare('SELECT * FROM crm_devices WHERE id=? AND owner_id=? AND enabled=1').bind(id,user).first<Device>();if(!row)throw Error('Collector unavailable');
+ const updated=await env.DB!.prepare("UPDATE crm_devices SET source_mode='relay',label='Mac mini · authenticated relay' WHERE id=? AND owner_id=? AND enabled=1 AND sequence=?").bind(id,user,row.sequence).run();if(!updated.meta.changes)throw Error('Collector changed; refresh');
+ return {deviceId:id,signingKey,baseSequence:row.sequence,endpoint:'https://homebase-messages-relay.carl-jeff.chatgpt.site/api/crm/ingest'};
+}
+export async function manualMode(user:string,id:string){
+ z.string().uuid().parse(id);await env.DB!.prepare("UPDATE crm_devices SET source_mode='manual',label='Mac mini · manual import' WHERE id=? AND owner_id=? AND enabled=1").bind(id,user).run();
 }

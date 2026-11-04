@@ -28,3 +28,15 @@ test('manual imports enforce ownership, opt-in, duplicate safety and source sepa
  const newFile={...snapshot,deviceId:crypto.randomUUID()};delete env.CRM_INGEST_MASTER_KEY;await importMessagingSnapshot('new-manual-owner',newFile,now);
  assert.equal((await crmStatus('new-manual-owner')).find(s=>s.id===newFile.deviceId).sourceMode,'manual');env.CRM_INGEST_MASTER_KEY='a'.repeat(64);
 });
+test('relay preparation preserves metrics, restricts credentials to owners, and signed retries are idempotent',async()=>{
+ const {prepareRelay,manualMode,relayDeviceSecret,importMessagingSnapshot}=await import('../lib/crm-store.ts');env.CRM_RELAY_MASTER='b'.repeat(64);
+ const {device,snapshot}=await fixture('relay-owner');await importMessagingSnapshot('relay-owner',snapshot,now);
+ await assert.rejects(()=>prepareRelay('other-owner',device.deviceId));
+ const credentials=await prepareRelay('relay-owner',device.deviceId);assert.equal(credentials.baseSequence,1);assert.equal(credentials.deviceId,device.deviceId);assert.equal(credentials.signingKey,await relayDeviceSecret(device.deviceId));assert.equal((await crmStatus('relay-owner')).find(s=>s.id===device.deviceId).snapshot.contacts.length,1);
+ await assert.rejects(()=>importMessagingSnapshot('relay-owner',snapshot,now));
+ const next={...snapshot,sequence:2,generatedAt:'2026-11-04T18:00:01Z'},body=JSON.stringify(next);
+ const first=await ingestMessaging(await sign(body,credentials),now);assert.equal(first.status,200);assert.equal((await (await ingestMessaging(await sign(body,credentials),now)).json()).duplicate,true);
+ await manualMode('other-owner',device.deviceId);assert.equal((await ingestMessaging(await sign(JSON.stringify({...next,sequence:3}),credentials),now)).status,200);
+ await manualMode('relay-owner',device.deviceId);assert.equal((await ingestMessaging(await sign(JSON.stringify({...next,sequence:4}),credentials),now)).status,401);
+ await revokeCollector('relay-owner',device.deviceId);await assert.rejects(()=>prepareRelay('relay-owner',device.deviceId));
+});

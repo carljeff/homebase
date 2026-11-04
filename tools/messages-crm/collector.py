@@ -9,6 +9,7 @@ except ImportError:
 APPLE_EPOCH = 978307200
 STAMP = '%Y-%m-%dT%H:%M:%SZ'
 EXPECTED_ENDPOINT = 'https://homebase.carl-jeff.chatgpt.site/api/crm/ingest'
+RELAY_ENDPOINT = 'https://homebase-messages-relay.carl-jeff.chatgpt.site/api/crm/ingest'
 BASE = os.path.expanduser('~/Library/Application Support/HomebaseMessagesCRM')
 SIGNING_SERVICE = 'com.homebase.messages.signing'
 GATE_SERVICE = 'com.homebase.messages.sites-access'
@@ -56,7 +57,7 @@ def load_config(path):
     if set(config) - set(['database', 'device_id', 'endpoint', 'contacts', 'reconcile_hours']):
         raise ValueError('Unknown configuration fields')
     uuid.UUID(config['device_id'])
-    if config.get('endpoint') != EXPECTED_ENDPOINT:
+    if config.get('endpoint') not in (EXPECTED_ENDPOINT, RELAY_ENDPOINT):
         raise ValueError('HTTPS ingestion URL required')
     if len(config['contacts']) > 200:
         raise ValueError('Too many contact mappings')
@@ -256,6 +257,13 @@ def keychain_read(service):
         raise RuntimeError('Keychain credential unavailable')
     return out.decode('utf-8').strip()
 
+def keychain_write(service, secret):
+    command = 'add-generic-password -U -a ' + shlex_quote(getpass.getuser()) + ' -s ' + shlex_quote(service) + ' -w ' + shlex_quote(secret) + '\n'
+    p = subprocess.Popen(['/usr/bin/security', '-i'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    p.communicate(command.encode('utf-8'))
+    if p.returncode or keychain_read(service) != secret:
+        raise RuntimeError('Keychain setup failed')
+
 def setup_credentials():
     # Interactive security mode accepts secret arguments on stdin, never argv/files.
     for service, label in [(SIGNING_SERVICE, 'Collector signing key'), (GATE_SERVICE, 'Sites service access token')]:
@@ -274,8 +282,9 @@ def shlex_quote(value):
 
 def transmit(body, config):
     secret = keychain_read(SIGNING_SERVICE)
-    gate = keychain_read(GATE_SERVICE)
-    if not re.match(r'^[a-f0-9]{64}$', secret) or not re.match(r'^[A-Za-z0-9_=-]{20,512}$', gate):
+    relay = config['endpoint'] == RELAY_ENDPOINT
+    gate = None if relay else keychain_read(GATE_SERVICE)
+    if not re.match(r'^[a-f0-9]{64}$', secret) or (not relay and not re.match(r'^[A-Za-z0-9_=-]{20,512}$', gate)):
         raise ValueError('Invalid credentials')
     stamp = str(int(time.time()))
     digest = hashlib.sha256(body.encode('utf-8')).hexdigest()
@@ -286,7 +295,9 @@ def transmit(body, config):
     read_fd = payload_file.fileno()
     if hasattr(os, 'set_inheritable'):
         os.set_inheritable(read_fd, True)
-    headers = ['Content-Type: application/json', 'OAI-Sites-Authorization: Bearer ' + gate, 'X-CRM-Device: ' + config['device_id'], 'X-CRM-Time: ' + stamp, 'X-CRM-Signature: ' + signature]
+    headers = ['Content-Type: application/json', 'X-CRM-Device: ' + config['device_id'], 'X-CRM-Time: ' + stamp, 'X-CRM-Signature: ' + signature]
+    if not relay:
+        headers.append('OAI-Sites-Authorization: Bearer ' + gate)
     args = ['/usr/bin/curl', '--silent', '--show-error', '--fail', '--proto', '=https', '--tlsv1.2', '--connect-timeout', '15', '--max-time', '45', '--max-redirs', '0', '--config', '-', '--data-binary', '@/dev/fd/' + str(read_fd), config['endpoint']]
     curl_config = ''.join('header = "' + h + '"\n' for h in headers)
     # close_fds=False is required for the read-only payload descriptor on Python 2.7.
@@ -301,7 +312,8 @@ def transmit(body, config):
 
 def main():
     parser = argparse.ArgumentParser(description='Read-only, metadata-only Homebase Messages collector')
-    parser.add_argument('command', choices=['diagnose', 'dry-run', 'sync', 'health', 'credentials', 'export'])
+    parser.add_argument('command', choices=['diagnose', 'dry-run', 'sync', 'health', 'credentials', 'export', 'pair'])
+    parser.add_argument('--base-sequence', type=int)
     parser.add_argument('--output', default=os.path.expanduser('~/Downloads/homebase-messages-metadata.json'))
     parser.add_argument('--config', default=os.path.join(BASE, 'config.json'))
     parser.add_argument('--confirm-manual-sync', action='store_true')
@@ -338,8 +350,34 @@ def run_collector(args, config, directory):
         if os.path.exists(cache_path) and os.path.samefile(cache_path, source.path):
             raise ValueError('Cache and source must differ')
         db = cache_open(cache_path)
+        if args.command == 'pair':
+            if os.path.exists(os.path.join(directory, 'AUTOMATION_APPROVED')):
+                raise RuntimeError('Disable scheduling before pairing again')
+            if args.base_sequence is None:
+                try:
+                    read_input = raw_input
+                except NameError:
+                    read_input = input
+                args.base_sequence = int(read_input('Pairing base sequence shown in Homebase: '))
+            if args.base_sequence < 0 or args.base_sequence > 9007199254740991:
+                raise ValueError('Use the base sequence shown in Homebase')
+            secret = getpass.getpass('Relay signing key (hidden): ').strip()
+            if not re.match(r'^[a-f0-9]{64}$', secret):
+                raise ValueError('Expected the relay signing key shown in Homebase')
+            keychain_write(SIGNING_SERVICE, secret)
+            # Pairing explicitly replaces only retry/cursor state. Rebuild source metadata on next sync.
+            config_path = os.path.abspath(args.config)
+            with open(config_path) as src:
+                public_config = json.load(src)
+            public_config['endpoint'] = RELAY_ENDPOINT
+            private_json(config_path, public_config)
+            put_meta(db, 'sequence', args.base_sequence)
+            db.execute("DELETE FROM meta WHERE key IN ('pending','last_success','relay_manual_success')")
+            put_meta(db, 'relay_paired', '1'); put_meta(db, 'reconcile', '0'); db.commit()
+            print('Relay key saved to login Keychain. Retry state replaced; mappings and Messages unchanged. Scheduling remains disabled. Run one manual sync next.')
+            return
         if args.command == 'health':
-            print(json.dumps({'lastSuccess': get_meta(db, 'last_success'), 'pendingRetry': get_meta(db, 'pending') is not None, 'sequence': int(get_meta(db, 'sequence', '0'))})); return
+            print(json.dumps({'lastSuccess': get_meta(db, 'last_success'), 'relayPaired': get_meta(db, 'relay_paired') == '1', 'manualRelaySuccess': get_meta(db, 'relay_manual_success'), 'pendingRetry': get_meta(db, 'pending') is not None, 'sequence': int(get_meta(db, 'sequence', '0'))})); return
         if args.command == 'dry-run':
             # Use in-memory cache so dry runs cannot advance the real incremental cursor.
             db.close(); db = sqlite3.connect(':memory:'); db.executescript('CREATE TABLE meta(key TEXT PRIMARY KEY,value TEXT);CREATE TABLE messages(rid INTEGER PRIMARY KEY,reason TEXT,stamp INTEGER,identity TEXT);CREATE TABLE activity(rid INTEGER,contact TEXT,kind TEXT,outgoing INTEGER,stamp INTEGER,PRIMARY KEY(rid,contact));')
@@ -367,7 +405,10 @@ def run_collector(args, config, directory):
         sequence = json.loads(pending)['sequence']
         if ack.get('sequence') != sequence:
             raise RuntimeError('Sequence acknowledgement mismatch')
-        put_meta(db, 'sequence', sequence); put_meta(db, 'last_success', utc()); db.execute('DELETE FROM meta WHERE key=?', ('pending',)); db.commit()
+        put_meta(db, 'sequence', sequence); put_meta(db, 'last_success', utc());
+        if config['endpoint'] == RELAY_ENDPOINT and args.confirm_manual_sync:
+            put_meta(db, 'relay_manual_success', utc())
+        db.execute('DELETE FROM meta WHERE key=?', ('pending',)); db.commit()
         print('Metadata synchronization acknowledged. No content transmitted.')
     finally:
         if db is not None:

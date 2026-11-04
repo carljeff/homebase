@@ -1,3 +1,46 @@
+# Current update: authenticated relay uploads
+
+A separate public HTTPS receiver accepts only signed metadata requests and forwards them to the fixed private Homebase ingestion route. Homebase keeps its household audience. The platform service credential stays in the relay's runtime secret store; the Mac needs only its device key in login Keychain. No new third-party subscription is involved. The relay stores only per-device rate counters (4 requests/minute, 200/day), not snapshots. Homebase remains the snapshot store.
+
+## Update and pair — scheduling remains disabled
+
+1. Update the local tools using the download/unzip/install commands in the installation section below. Existing config.json and mappings are preserved.
+2. In Homebase Friends → Mac collector setup & health, select **Prepare relay credentials** for your existing collector. This preserves its UUID, prior metrics and server sequence; it changes the source to relay mode. It does not start the Mac job. Only the source owner can get the key. Copy its signing key and note the pairing base sequence. Never paste the key into chat or a shell command. Do not use an old signing key.
+3. In Termius run:
+
+```sh
+/usr/bin/python "$HOME/Library/Application Support/HomebaseMessagesCRM/collector.py" pair
+```
+
+Enter the **pairing base sequence** from Homebase, then paste the relay key at the hidden prompt. This stores/verifies the key in login Keychain, updates only the pinned endpoint in config, replaces local upload retry/cursor state with the server sequence, and requires a new manual validation. Contact mappings and Messages are unchanged. Pairing rejects active scheduling; disable first if re-pairing. No network request is made during pairing. The old platform token is neither read nor required.
+
+4. After pairing, run the explicitly approved one-time upload:
+
+```sh
+/usr/bin/python "$HOME/Library/Application Support/HomebaseMessagesCRM/collector.py" sync --confirm-manual-sync --reconcile
+/usr/bin/python "$HOME/Library/Application Support/HomebaseMessagesCRM/collector.py" health
+```
+
+Refresh sync status in Friends. Verify the receipt/sequence advances, the test friend's direct/group metrics are sensible, and no unexpected count inflation occurs when running another manual sync. A new snapshot replaces totals. Network failures preserve the exact pending body for retry; do not edit it. Expired request signatures are regenerated per retry. A quota response or outage leaves data local for the next attempt. Revoke in Friends to reject further uploads and clear the hosted snapshot.
+
+## Scheduling — only after the manual upload is confirmed and approved
+
+Do not run this until the real manual upload and privacy behavior are verified and approval is given:
+
+```sh
+/usr/bin/python "$HOME/Library/Application Support/HomebaseMessagesCRM/manage.py" enable --approve-automation
+```
+
+The installer now requires a successful **manual relay** upload, the pinned relay endpoint and no pending retry. It installs a user LaunchAgent every 900 seconds/at login, background/low-priority I/O. No cloud scheduled task is created. Reboot behavior and Keychain availability after automatic login still need real Mac validation, along with normal Messages, SMS forwarding, SSH and VNC operation. `manage.py disable` unloads only this job. `uninstall` retains local files pending deliberate cleanup.
+
+To return to file import: disable the Mac job first, click **Return to manual import** in Friends, then use fresh exports. That blocks signed relay uploads. Pair again before switching back to relay. Do not revoke/recreate a device simply to change modes. Old manual instructions below remain useful for export/import and installation; the legacy direct Sites-token flow is superseded by this relay.
+
+### Operator maintenance
+
+Relay source lives in tools/messages-crm/relay; deploy it as its own Site using its nested hosting manifest, never the Homebase root manifest. Its DB contains only pseudonymous device ID and fixed-size minute/day counters. Both services use CRM_RELAY_MASTER runtime secrets; relay alone stores HOMEBASE_ACCESS_TOKEN for the exact private Homebase Site. Neither belongs in source or Mac config. Changing the relay master invalidates all device keys and requires re-pairing. Platform token expiry/rotation or access changes may interrupt forwarding; update the relay runtime secret and redeploy through supported Sites tools. Treat this as a maintenance limitation; do not change Homebase's audience or give the Mac the platform token. The relay cannot read Homebase contacts, settings, snapshots or visitor APIs. Server-side verification still enforces device revocation, source mode, sequence, payload schema and contact opt-in.
+
+---
+
 # Current supported workflow: manual metadata export/import
 
 **Use this section instead of the legacy signing-key, service-token and sync instructions below. No credentials or automatic sync are needed for manual import.**
