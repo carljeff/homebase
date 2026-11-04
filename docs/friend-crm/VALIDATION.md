@@ -32,3 +32,9 @@ No production deployment, database migration, runtime secret provisioning, perso
 The known 989-message baseline and historical mode 666 remain user-provided findings, not independently reverified results. Real High Sierra Python/SQLite/Keychain/curl behavior, source timestamp/schema diagnosis, authenticated hosted-service access, household sharing, real browser/mobile usability, CPU/I/O responsiveness and reboot persistence still require validation. Automated UI checks are synthetic DOM tests, not a live browser session.
 
 The app is ready for review and a controlled deployment decision; the end-to-end integration is not yet certified ready for unattended operation. Follow MAC_SETUP.md in order: local-only diagnostics/dry run, then separately approved application deployment and one manual upload, then separately approved automation/reboot validation.
+
+## Publication checks
+
+Homebase v19 and relay v1 published successfully. Relay hosting logs show GET / returning 200. Programmatic health and signed synthetic probes from the authoring workspace received HTTP 403 (public response `error code: 1010`); no matching POST reached relay invocation logs. Therefore a real public-network relay upload is **not yet verified**. Test public health from the Mac before pairing; do not activate scheduling until the real manual upload succeeds. No alternate network path, fingerprint workaround or security relaxation was attempted.
+
+An additional isolated installer check mocked launchctl and verified the approved/manual-success activation path creates only the intended integration marker/plist. No real launchd job was installed. Both Mac scripts passed legacy Python grammar parsing, which does not replace actual High Sierra Keychain/TLS/reboot testing.
