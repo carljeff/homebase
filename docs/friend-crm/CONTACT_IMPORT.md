@@ -2,7 +2,7 @@
 
 ## Status and privacy
 
-Implementation is ready for review. Deploy the Homebase contact route and relay update together before using the online import command. No production deployment, real address-book access or real contact import was performed for this change. Existing activity synchronization and scheduling are unchanged.
+Deployed with approval on November 4, 2026: Homebase v20 and relay v4. No real address-book access or real contact import was performed by the agent. Existing activity synchronization and scheduling are unchanged. Update the Mac package below before using the new helper.
 
 Only contacts you select and approve are imported. Phone numbers and email addresses are normalized/matched on the Mac and saved only in its existing private mapping configuration. Homebase receives approved display names and UUIDs, plus explicit create/link instructions. The roster sent back to the Mac contains only friend names, UUIDs and messaging opt-in flags. Notes, birthdays, addresses, photos and raw vCard data are never sent. The helper never reads or writes Apple's Contacts or Messages databases, sends a message, or schedules contact imports.
 
@@ -20,9 +20,9 @@ Protect this exported file (this affects only your export, never a system databa
 
 An iPad-exported vCard transferred privately to the mini can also be used. Never paste the vCard or interactive contact details into chat/GitHub.
 
-## 2. Update the local tools after the deployment is approved
+## 2. Update the local tools
 
-The ZIP on `feat/selected-contact-import` includes the new contacts.py. Once that branch is available and both services are deployed:
+The ZIP on `feat/selected-contact-import` includes the new contacts.py. Both services are deployed; run:
 
 ```sh
 /usr/bin/curl --fail --location \

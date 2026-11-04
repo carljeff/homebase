@@ -1,6 +1,6 @@
-# Selected contact import update (review pending)
+# Selected contact import update (deployed)
 
-The focused branch feat/selected-contact-import adds a local selective vCard helper plus a minimal signed names/IDs route. See CONTACT_IMPORT.md. It reuses the existing paired relay, keeps phone/email fields local, preserves existing friend records/settings, and does not change the running activity schedule. Production remains unchanged until deployment is approved. No database migration or new credential/service is required.
+The focused branch feat/selected-contact-import adds a local selective vCard helper plus a minimal signed names/IDs route. See CONTACT_IMPORT.md. It reuses the existing paired relay, keeps phone/email fields local, preserves existing friend records/settings, and does not change the running activity schedule. Homebase v20 and relay v4 were deployed with approval on November 4, 2026. Real selected-contact validation on the Mac is next. No database migration or new credential/service is required.
 
 # Latest: authenticated upload relay
 

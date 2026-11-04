@@ -1,3 +1,7 @@
+# Contact import publication — November 4, 2026
+
+Homebase v20 and relay v4 deployed successfully after explicit approval. The deployment checkout passed TypeScript, its application test suite and a fresh production build; relay tests (6) and artifact validation passed. Homebase retained custom household access and the relay retained its approved public audience. Existing runtime secret revisions stayed at 2 (Homebase) and 1 (relay); no migration or credential/schedule change was needed. No real contact import was executed by the agent. The updated Mac installer and first selected vCard preview/import still need the user's run.
+
 # Selected contact import — November 4, 2026
 
 Executed on the development checkout: 106 application tests, 24 Python collector/contact-helper/installer tests, and 6 standalone relay tests passed. TypeScript and focused lint passed; Homebase production build and relay artifact validation completed successfully. New tests include actual Python names-only request serialization/signatures through relay and private Homebase, stable IDs/retries, minimal roster fields, existing record/cursor preservation, opt-out/revocation/collision/privacy rejection, vCard folding/Unicode/multiple handles, preview/cancellation, backup/restore and outage resume. Existing pre-task lint issues remain outside scope.
