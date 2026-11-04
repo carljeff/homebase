@@ -143,6 +143,6 @@ class RelayPairTest(unittest.TestCase):
         payload=json.dumps({'sequence':1});digest=hashlib.sha256(payload.encode()).hexdigest();process=mock.Mock();process.returncode=0;process.communicate.return_value=(json.dumps({'accepted':True,'sequence':1,'digest':digest,'duplicate':False}).encode(),b'')
         config={'endpoint':c.RELAY_ENDPOINT,'device_id':self.config['device_id']}
         with mock.patch.object(c,'keychain_read',return_value='a'*64) as read,mock.patch.object(c.subprocess,'Popen',return_value=process) as launch:
-            c.transmit(payload,config);read.assert_called_once_with(c.SIGNING_SERVICE);stdin=process.communicate.call_args[0][0];self.assertNotIn(b'OAI-Sites-Authorization',stdin);self.assertNotIn('a'*64,' '.join(launch.call_args[0][0]));self.assertEqual(launch.call_args[0][0][-1],c.RELAY_ENDPOINT)
+            c.transmit(payload,config);read.assert_called_once_with(c.SIGNING_SERVICE);stdin=process.communicate.call_args[0][0];self.assertNotIn(b'OAI-Sites-Authorization',stdin);self.assertIn(('X-CRM-Body-SHA256: '+digest).encode(),stdin);self.assertIn(('X-CRM-Key-Tag: '+hashlib.sha256(('a'*64).encode()).hexdigest()).encode(),stdin);self.assertNotIn('a'*64,' '.join(launch.call_args[0][0]));self.assertEqual(launch.call_args[0][0][-1],c.RELAY_ENDPOINT)
 
 if __name__=='__main__':unittest.main()

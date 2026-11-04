@@ -13,6 +13,9 @@ RELAY_ENDPOINT = 'https://homebase-messages-relay.carl-jeff.chatgpt.site/api/crm
 BASE = os.path.expanduser('~/Library/Application Support/HomebaseMessagesCRM')
 SIGNING_SERVICE = 'com.homebase.messages.signing'
 GATE_SERVICE = 'com.homebase.messages.sites-access'
+class CollectorFailure(RuntimeError):
+    pass
+
 SAFE_ERROR = 'Collector failed; no source changes made. Check permissions, schema, credentials or network using the local diagnostics.'
 
 def utc(value=None):
@@ -254,7 +257,7 @@ def keychain_read(service):
     p = subprocess.Popen(['/usr/bin/security', 'find-generic-password', '-a', getpass.getuser(), '-s', service, '-w'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     out, unused = p.communicate()
     if p.returncode:
-        raise RuntimeError('Keychain credential unavailable')
+        raise CollectorFailure('Keychain key unavailable. Unlock the login Keychain, then retry; do not share its password.')
     return out.decode('utf-8').strip()
 
 def keychain_write(service, secret):
@@ -295,7 +298,7 @@ def transmit(body, config):
     read_fd = payload_file.fileno()
     if hasattr(os, 'set_inheritable'):
         os.set_inheritable(read_fd, True)
-    headers = ['Content-Type: application/json', 'X-CRM-Device: ' + config['device_id'], 'X-CRM-Time: ' + stamp, 'X-CRM-Signature: ' + signature]
+    headers = ['Content-Type: application/json', 'X-CRM-Device: ' + config['device_id'], 'X-CRM-Time: ' + stamp, 'X-CRM-Signature: ' + signature, 'X-CRM-Body-SHA256: ' + digest, 'X-CRM-Key-Tag: ' + hashlib.sha256(secret.encode('ascii')).hexdigest()]
     if not relay:
         headers.append('OAI-Sites-Authorization: Bearer ' + gate)
     args = ['/usr/bin/curl', '--silent', '--show-error', '--fail', '--proto', '=https', '--tlsv1.2', '--connect-timeout', '15', '--max-time', '45', '--max-redirs', '0', '--config', '-', '--data-binary', '@/dev/fd/' + str(read_fd), config['endpoint']]
@@ -304,7 +307,7 @@ def transmit(body, config):
     p = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=False)
     out, unused = p.communicate(curl_config.encode('ascii')); payload_file.close()
     if p.returncode:
-        raise RuntimeError('HTTPS synchronization failed')
+        raise CollectorFailure('HTTPS request failed (curl status %d). The pending upload is preserved; check relay diagnostics before re-pairing.' % p.returncode)
     result = json.loads(out.decode('utf-8'))
     if result.get('accepted') is not True or result.get('digest') != digest:
         raise RuntimeError('Unexpected acknowledgement')
@@ -421,6 +424,9 @@ if __name__ == '__main__':
         except OSError:
             pass
         main()
+    except CollectorFailure as error:
+        print(str(error), file=sys.stderr)
+        sys.exit(1)
     except Exception:
         # Never echo SQL, handles, payloads, credentials, subprocess output or exceptions.
         print(SAFE_ERROR, file=sys.stderr)

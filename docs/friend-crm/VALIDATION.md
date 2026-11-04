@@ -1,3 +1,9 @@
+# Upload diagnostics update — November 4, 2026
+
+Real Mac pairing succeeded after unlocking login Keychain. Relay logs identify subsequent uploads as SIGNATURE_MISMATCH; clock validation passes. Cause is not yet established. Executed checks: 103 application tests, 14 Python tests, and 5 standalone relay tests passed. A synthetic actual-curl loopback test on Linux confirmed exact body bytes and HMAC preservation, but does not establish High Sierra descriptor behavior.
+
+Collector now sends a body digest and one-way device-key tag; the relay compares these without logging or returning either value. Fixed rejection codes distinguish BODY_BYTES_CHANGED from DEVICE_KEY_MISMATCH. Full HMAC authentication remains mandatory and unchanged. Optional diagnostic headers are backwards compatible. Keys, payloads, contacts and exception details are never printed. Keychain-read failures and curl exit statuses now have safe actionable messages. No successful real relay upload has been observed, and scheduling stays disabled.
+
 # Authenticated relay update — November 4, 2026
 
 Local tests: 88 application tests (including synthetic Python collector → relay → private ingestion, repeat acknowledgement, owner authorization, mode switches and revocation), 14 Python collector/installer tests, and 4 standalone relay security/rate-limit tests. TypeScript and focused lint passed. Production builds are executed by publication. Prior full-repository lint issues remain unchanged.

@@ -36,6 +36,9 @@ export async function handle(request,env,forward=fetch,now=Date.now()){
  let size=0;const parts=[];for(;;){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>1000000){await reader.cancel();return response(413);}parts.push(value);}
  const body=new Uint8Array(size);let at=0;for(const p of parts){body.set(p,at);at+=p.length;}
  const digest=hex(await crypto.subtle.digest('SHA-256',body));const expected=await mac(await deviceKey(env.CRM_RELAY_MASTER,id),'POST\n'+PATH+'\n'+time+'\n'+digest);
+ const declaredDigest=request.headers.get('x-crm-body-sha256'),keyTag=request.headers.get('x-crm-key-tag');
+ if(declaredDigest&&declaredDigest!==digest)return reject(401,'BODY_BYTES_CHANGED');
+ if(keyTag&&keyTag!==hex(await crypto.subtle.digest('SHA-256',encoder.encode(await deviceKey(env.CRM_RELAY_MASTER,id)))))return reject(401,'DEVICE_KEY_MISMATCH');
  let mismatch=0;for(let i=0;i<64;i++)mismatch|=signature.charCodeAt(i)^expected.charCodeAt(i);if(mismatch)return reject(401,'SIGNATURE_MISMATCH');
  let data;try{data=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(body));}catch{return response(400);}
  if(!metadata(data)||data.deviceId!==id||Date.parse(data.generatedAt)>now+300000)return response(400);
