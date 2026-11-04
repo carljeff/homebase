@@ -145,4 +145,37 @@ class RelayPairTest(unittest.TestCase):
         with mock.patch.object(c,'keychain_read',return_value='a'*64) as read,mock.patch.object(c.subprocess,'Popen',return_value=process) as launch:
             c.transmit(payload,config);read.assert_called_once_with(c.SIGNING_SERVICE);stdin=process.communicate.call_args[0][0];self.assertNotIn(b'OAI-Sites-Authorization',stdin);self.assertIn(('X-CRM-Body-SHA256: '+digest).encode(),stdin);self.assertIn(('X-CRM-Key-Tag: '+hashlib.sha256(('a'*64).encode()).hexdigest()).encode(),stdin);self.assertNotIn('a'*64,' '.join(launch.call_args[0][0]));self.assertEqual(launch.call_args[0][0][-1],c.RELAY_ENDPOINT)
 
+class UploadTransportTest(unittest.TestCase):
+    def test_named_file_preserves_exact_bytes_mode_and_cleanup_on_error(self):
+        from unittest import mock
+        payload = json.dumps({'sequence':1,'synthetic':'caf\u00e9'},ensure_ascii=False)
+        encoded=payload.encode('utf-8');digest=hashlib.sha256(encoded).hexdigest()
+        with tempfile.TemporaryDirectory() as directory:
+            config={'endpoint':c.RELAY_ENDPOINT,'device_id':A,'_directory':directory}
+            for returncode in (0,22):
+                def launch(args,**kwargs):
+                    self.assertTrue(kwargs['close_fds']);path=args[args.index('--data-binary')+1][1:]
+                    self.assertNotIn('/dev/fd/',path);self.assertEqual(Path(path).read_bytes(),encoded);self.assertEqual(os.stat(path).st_mode&0o777,0o600);self.assertEqual(os.path.dirname(path),directory)
+                    process=mock.Mock();process.returncode=returncode;process.communicate.return_value=(json.dumps({'accepted':True,'sequence':1,'digest':digest,'duplicate':False}).encode(),b'');return process
+                with mock.patch.object(c,'keychain_read',return_value='a'*64),mock.patch.object(c.subprocess,'Popen',side_effect=launch):
+                    if returncode:
+                        with self.assertRaises(c.CollectorFailure):c.transmit(payload,config)
+                    else:c.transmit(payload,config)
+                self.assertEqual(os.listdir(directory),[])
+    def test_actual_curl_sends_signed_bytes_over_synthetic_loopback(self):
+        from unittest import mock
+        import threading,http.server,subprocess
+        payload=json.dumps({'sequence':1,'synthetic':'metadata-only'});secret='a'*64;observed={}
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def log_message(self,*args):pass
+            def do_POST(self):
+                raw=self.rfile.read(int(self.headers['Content-Length']));digest=hashlib.sha256(raw).hexdigest();expected=c.hmac.new(secret.encode(),('POST\n/api/crm/ingest\n'+self.headers['X-CRM-Time']+'\n'+digest).encode(),hashlib.sha256).hexdigest();observed['bytes']=raw;observed['valid']=self.headers['X-CRM-Signature']==expected;self.send_response(200);self.end_headers();self.wfile.write(json.dumps({'accepted':True,'sequence':1,'digest':digest,'duplicate':False}).encode())
+        server=http.server.HTTPServer(('127.0.0.1',0),Handler);server.timeout=5;thread=threading.Thread(target=server.handle_request);thread.start();real=subprocess.Popen
+        def local(args,**kwargs):
+            self.assertEqual(args[-1],c.RELAY_ENDPOINT);args=list(args);args[-1]='http://127.0.0.1:'+str(server.server_port)+'/api/crm/ingest';args[args.index('--proto')+1]='=http';return real(args,**kwargs)
+        try:
+            with mock.patch.object(c,'keychain_read',return_value=secret),mock.patch.object(c.subprocess,'Popen',side_effect=local):c.transmit(payload,{'endpoint':c.RELAY_ENDPOINT,'device_id':A})
+        finally:thread.join(6);server.server_close()
+        self.assertEqual(observed['bytes'],payload.encode());self.assertTrue(observed['valid'])
+
 if __name__=='__main__':unittest.main()

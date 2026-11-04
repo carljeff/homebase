@@ -74,6 +74,7 @@ def load_config(path):
             if not handle or handle in mappings and mappings[handle] != cid:
                 raise ValueError('Invalid or conflicting local handle mapping')
             mappings[handle] = cid
+    config['_directory'] = os.path.dirname(os.path.abspath(path))
     config['_mapping'] = mappings
     config['_mapping_hash'] = hashlib.sha256(json.dumps(sorted(mappings.items())).encode('utf-8')).hexdigest()
     return config
@@ -292,20 +293,24 @@ def transmit(body, config):
     stamp = str(int(time.time()))
     digest = hashlib.sha256(body.encode('utf-8')).hexdigest()
     signature = hmac.new(secret.encode('ascii'), ('POST\n/api/crm/ingest\n' + stamp + '\n' + digest).encode('ascii'), hashlib.sha256).hexdigest()
-    # Request body goes through a private local pipe; secrets only through curl config stdin.
-    payload_file = tempfile.TemporaryFile()
-    payload_file.write(body.encode('utf-8')); payload_file.seek(0)
-    read_fd = payload_file.fileno()
-    if hasattr(os, 'set_inheritable'):
-        os.set_inheritable(read_fd, True)
-    headers = ['Content-Type: application/json', 'X-CRM-Device: ' + config['device_id'], 'X-CRM-Time: ' + stamp, 'X-CRM-Signature: ' + signature, 'X-CRM-Body-SHA256: ' + digest, 'X-CRM-Key-Tag: ' + hashlib.sha256(secret.encode('ascii')).hexdigest()]
-    if not relay:
-        headers.append('OAI-Sites-Authorization: Bearer ' + gate)
-    args = ['/usr/bin/curl', '--silent', '--show-error', '--fail', '--proto', '=https', '--tlsv1.2', '--connect-timeout', '15', '--max-time', '45', '--max-redirs', '0', '--config', '-', '--data-binary', '@/dev/fd/' + str(read_fd), config['endpoint']]
-    curl_config = ''.join('header = "' + h + '"\n' for h in headers)
-    # close_fds=False is required for the read-only payload descriptor on Python 2.7.
-    p = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=False)
-    out, unused = p.communicate(curl_config.encode('ascii')); payload_file.close()
+    # High Sierra /dev/fd reopening can change the bytes curl reads. Use a closed,
+    # mode-600 named file in the owned config directory, with cleanup on every exit.
+    # Only metadata is written here. Credentials stay in memory/config stdin.
+    payload_file = tempfile.NamedTemporaryFile(prefix='upload-', suffix='.json', dir=config.get('_directory'), delete=False)
+    payload_path = payload_file.name
+    try:
+        payload_file.write(body.encode('utf-8'))
+        payload_file.close()
+        headers = ['Content-Type: application/json', 'X-CRM-Device: ' + config['device_id'], 'X-CRM-Time: ' + stamp, 'X-CRM-Signature: ' + signature, 'X-CRM-Body-SHA256: ' + digest, 'X-CRM-Key-Tag: ' + hashlib.sha256(secret.encode('ascii')).hexdigest()]
+        if not relay:
+            headers.append('OAI-Sites-Authorization: Bearer ' + gate)
+        args = ['/usr/bin/curl', '--silent', '--show-error', '--fail', '--proto', '=https', '--tlsv1.2', '--connect-timeout', '15', '--max-time', '45', '--max-redirs', '0', '--config', '-', '--data-binary', '@' + payload_path, config['endpoint']]
+        curl_config = ''.join('header = "' + h + '"\n' for h in headers)
+        p = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
+        out, unused = p.communicate(curl_config.encode('ascii'))
+    finally:
+        payload_file.close()
+        os.unlink(payload_path)
     if p.returncode:
         raise CollectorFailure('HTTPS request failed (curl status %d). The pending upload is preserved; check relay diagnostics before re-pairing.' % p.returncode)
     result = json.loads(out.decode('utf-8'))

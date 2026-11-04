@@ -1,3 +1,9 @@
+# High Sierra upload handoff fix — November 4, 2026
+
+Relay diagnostics confirmed BODY_BYTES_CHANGED on the real Mac upload. This established a body transport mismatch, rather than evidence that re-pairing would help. Collector replaces /dev/fd with a closed named temporary metadata file, created mode 600 in the private configuration directory; curl opens the path normally and no descriptors are inherited. Credentials remain only in memory and curl config stdin. Finally cleanup removes the file on ordinary success/failure; an abrupt process kill or power loss can leave a mode-600 upload-*.json in the private collector directory. The existing pending retry remains untouched. No source Messages writes or key/config changes are introduced.
+
+Validation: 16 Python tests and 103 application tests passed, including a real-curl synthetic loopback test for exact body bytes/HMAC and temporary-file mode/cleanup tests on successful and failed HTTP attempts. Actual High Sierra retry remains required; scheduling is disabled. No successful real relay upload has been observed yet.
+
 # Upload diagnostics update — November 4, 2026
 
 Real Mac pairing succeeded after unlocking login Keychain. Relay logs identify subsequent uploads as SIGNATURE_MISMATCH; clock validation passes. Cause is not yet established. Executed checks: 103 application tests, 14 Python tests, and 5 standalone relay tests passed. A synthetic actual-curl loopback test on Linux confirmed exact body bytes and HMAC preservation, but does not establish High Sierra descriptor behavior.
