@@ -130,11 +130,11 @@ class Source(object):
                 except ValueError:
                     pass
         return self
-    def messages(self, after, limit=500):
+    def messages(self, after, limit=500, descending=False):
         system = 'COALESCE(m.item_type,0)' if 'item_type' in self.message_columns else '0'
         reaction = 'COALESCE(m.associated_message_type,0)' if 'associated_message_type' in self.message_columns else '0'
         chats = '(SELECT group_concat(DISTINCT chat_id) FROM chat_message_join WHERE message_id=m.ROWID)' if self.associations else "''"
-        sql = 'SELECT m.ROWID,CASE WHEN typeof(m.date) IN (\'integer\',\'real\') THEN m.date ELSE NULL END,m.is_from_me,COALESCE(m.handle_id,0),' + system + ',' + reaction + ',' + chats + ',' + ('hex(m.guid)' if 'guid' in self.message_columns else "''") + ' FROM message m WHERE m.ROWID>' + str(int(after)) + ' ORDER BY m.ROWID LIMIT ' + str(int(limit))
+        sql = 'SELECT m.ROWID,CASE WHEN typeof(m.date) IN (\'integer\',\'real\') THEN m.date ELSE NULL END,m.is_from_me,COALESCE(m.handle_id,0),' + system + ',' + reaction + ',' + chats + ',' + ('hex(m.guid)' if 'guid' in self.message_columns else "''") + ' FROM message m WHERE m.ROWID' + ('<=' if descending else '>') + str(int(after)) + ' ORDER BY m.ROWID ' + ('DESC' if descending else 'ASC') + ' LIMIT ' + str(int(limit))
         return self.query(sql)
     def totals(self):
         row = self.query('SELECT count(*),sum(CASE WHEN is_from_me=0 THEN 1 ELSE 0 END),sum(CASE WHEN is_from_me=1 THEN 1 ELSE 0 END),COALESCE(max(ROWID),0) FROM message')[0]

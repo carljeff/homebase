@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Selective local vCard matching. Only approved names/UUIDs cross the relay."""
 from __future__ import print_function
-import argparse, fcntl, hashlib, json, os, re, stat, sys, tempfile, unicodedata, uuid
+import argparse, collections, fcntl, hashlib, json, os, re, stat, sys, tempfile, time, unicodedata, uuid
 from contextlib import contextmanager
 try:
     text_type = unicode
@@ -44,7 +44,7 @@ def content_line(value):
             return value[:i], value[i + 1:]
     raise ContactError('Malformed vCard line. Export selected contacts as UTF-8 vCard 3.0 or 4.0.')
 
-def parse_vcards(path):
+def parse_vcards(path, max_cards=200, skip_invalid_names=False):
     if os.path.getsize(path) > 20000000:
         raise ContactError('vCard exceeds 20 MB. Export fewer contacts without photos.')
     with open(path, 'rb') as src:
@@ -55,11 +55,12 @@ def parse_vcards(path):
     lines = []
     for line in raw.split(b'\n'):
         if line.startswith((b' ', b'\t')) and lines:
-            lines[-1] += line[1:]
+            lines[-1].append(line[1:])
         elif line:
-            lines.append(line)
-    cards, current = [], None
-    for raw_line in lines:
+            lines.append([line])
+    cards, current, seen_cards = [], None, set()
+    for parts in lines:
+        raw_line = b''.join(parts)
         try:
             line = raw_line.decode('utf-8')
         except UnicodeError:
@@ -70,19 +71,23 @@ def parse_vcards(path):
             current = {'names': [], 'handles': [], 'version': None}
             continue
         if line.upper() == 'END:VCARD':
-            if current is None or current['version'] not in ('3.0', '4.0') or not current['names']:
+            if current is None or current['version'] not in ('3.0', '4.0'):
                 raise ContactError('A card lacks a supported VERSION/FN. Export vCard 3.0 or 4.0.')
-            name = ' '.join(unescape(current['names'][0]).split())
+            name = ' '.join(unescape(current['names'][0]).split()) if current['names'] else ''
             if not valid_name(name):
+                if skip_invalid_names:
+                    current = None
+                    continue
                 raise ContactError('A contact name is invalid or contains an email/phone. Correct its display name locally first.')
             handles = sorted(set(current['handles']))
             if handles:
                 card = {'name': name, 'handles': handles}
-                if card not in cards:
-                    cards.append(card)
+                identity = (name, tuple(handles))
+                if identity not in seen_cards:
+                    cards.append(card); seen_cards.add(identity)
             current = None
-            if len(cards) > 200:
-                raise ContactError('Select at most 200 exported cards; import at most 25 at a time.')
+            if len(cards) > max_cards:
+                raise ContactError('Export exceeds the supported contact-card limit; split the local export.')
             continue
         if current is None:
             raise ContactError('Unexpected data outside a vCard.')
@@ -278,6 +283,8 @@ def choose_plan(cards, roster, config, ask=None):
     entries = []
     for index in selected:
         card = cards[index]
+        if card.get('discovery'):
+            output(card['discovery'])
         output('Local handles for ' + card['name'] + ':')
         for number, handle in enumerate(card['handles'], 1):
             output('  %d. %s' % (number, handle))
@@ -292,11 +299,15 @@ def choose_plan(cards, roster, config, ask=None):
         if choice == 's':
             continue
         if choice == 'n':
+            if card.get('mappedId'):
+                raise ContactError('This person already has a local Homebase mapping. Choose that existing friend instead of creating a duplicate.')
             if any(name_key(f['name']) == name_key(card['name']) for f in roster) and ask('A Homebase friend has this name. Type NEW to create a distinct person: ').strip() != 'NEW':
                 raise ContactError('Cancelled. Choose the existing friend to avoid a duplicate.')
             entry = {'contactId': str(uuid.uuid4()), 'name': card['name'], 'create': True, 'handles': handles}
         elif choice.isdigit() and 1 <= int(choice) <= len(roster):
             friend = roster[int(choice) - 1]
+            if card.get('mappedId') and card['mappedId'] != friend['contactId']:
+                raise ContactError('This card already maps to another Homebase friend; no reassignment was made.')
             if not friend['trackMessaging']:
                 raise ContactError('Enable messaging metadata for that friend in Homebase first, then restart selection.')
             entry = {'contactId': friend['contactId'], 'name': friend['name'], 'create': False, 'handles': handles}
@@ -313,10 +324,87 @@ def choose_plan(cards, roster, config, ask=None):
     output('New friends will have messaging metadata enabled. Existing notes and reminders are unchanged.')
     return plan if ask('Type IMPORT to approve, or Enter to cancel: ').strip() == 'IMPORT' else None
 
+def discover_contacts(source, cards, mapping, limit=10000, include_groups=False, include_mapped=False, now=None):
+    if not 1 <= limit <= 50000:
+        raise ContactError('Choose a message limit between 1 and 50000.')
+    now = time.time() if now is None else now
+    source.inspect()
+    high = int(source.query('SELECT COALESCE(max(ROWID),0) FROM message')[0][0])
+    # Indexed bounded read, newest recorded rows first. Never select message content.
+    rows = source.messages(high, limit=limit, descending=True)
+    index = collections.defaultdict(set)
+    for number, card in enumerate(cards):
+        for handle in card['handles']:
+            index[handle].add(number)
+    stats = {}; unmatched = set(); seen = set()
+    summary = dict(scanned=len(rows), uniqueMessages=0, duplicates=0, invalidTimestamp=0, excluded=0, eligibleUnlinked=0, ambiguousMessages=0, ambiguousContactHandles=0, unmatchedHandles=0, alreadyMapped=0, groupOnlyOmitted=0, conflictingMappings=0)
+    identity_map = dict((h, h) for h in source.handles.values() if h)
+    ambiguous_handles = set()
+    for row in reversed(rows):
+        identity = ('guid:' + row[7]) if len(row) > 7 and row[7] else 'row:' + row[0]
+        if identity in seen:
+            summary['duplicates'] += 1; continue
+        seen.add(identity); summary['uniqueMessages'] += 1
+        entries, reason, unused = c.classify(row, source, identity_map, now)
+        if reason in ('invalidTimestamp', 'excluded'):
+            summary[reason] += 1
+        elif reason == 'unlinked':
+            summary['eligibleUnlinked'] += 1
+        elif reason == 'ambiguous':
+            summary['ambiguousMessages'] += 1
+        message_people = set()
+        for handle, kind, outgoing, stamp in entries:
+            matches = index.get(handle, set())
+            if len(matches) != 1:
+                if matches: ambiguous_handles.add(handle)
+                else: unmatched.add(handle)
+                continue
+            number = next(iter(matches)); token = (number, kind, outgoing)
+            state = stats.setdefault(number, dict(directIn=0, directOut=0, groupIn=0, groupOut=0, last=0, observed=set()))
+            state['observed'].add(handle)
+            if token in message_people:
+                continue
+            message_people.add(token)
+            key = ('direct' if kind == 'direct' else 'group') + ('Out' if outgoing else 'In')
+            state[key] += 1; state['last'] = max(state['last'], stamp)
+    summary['ambiguousContactHandles'] = len(ambiguous_handles); summary['unmatchedHandles'] = len(unmatched)
+    candidates = []
+    for number, state in stats.items():
+        card = cards[number]
+        # Shared handles are excluded from proposals, never guessed or reassigned.
+        handles = [h for h in card['handles'] if len(index[h]) == 1]
+        ids = set(mapping[h] for h in handles if h in mapping)
+        if len(ids) > 1:
+            summary['conflictingMappings'] += 1; continue
+        mapped_id = next(iter(ids)) if ids else None
+        new_observed = any(h not in mapping for h in state['observed'])
+        if mapped_id and not new_observed and not include_mapped:
+            summary['alreadyMapped'] += 1; continue
+        if not state['directIn'] and not state['directOut'] and not include_groups:
+            summary['groupOnlyOmitted'] += 1; continue
+        item = dict(name=card['name'], handles=handles, mappedId=mapped_id)
+        item['activity'] = dict((key, state[key]) for key in ['directIn', 'directOut', 'groupIn', 'groupOut', 'last'])
+        item['discovery'] = 'Direct: %d incoming / %d outgoing; group: %d incoming / %d outgoing; last UTC: %s%s' % (state['directIn'], state['directOut'], state['groupIn'], state['groupOut'], c.utc(state['last']), ' [existing mapping: choose its Homebase friend]' if mapped_id else '')
+        candidates.append(item)
+    candidates.sort(key=lambda item: (-(item['activity']['directIn'] + item['activity']['directOut'] > 0), -(item['activity']['directIn'] + item['activity']['directOut']), -item['activity']['last'], name_key(item['name'])))
+    summary['candidates'] = len(candidates)
+    return candidates, summary
+
+def show_discovery(cards, summary):
+    output('Local discovery: %d newest recorded rows; %d review candidates; %d already mapped; %d unmatched handles; %d ambiguous contact handles.' % (summary['scanned'], summary['candidates'], summary['alreadyMapped'], summary['unmatchedHandles'], summary['ambiguousContactHandles']))
+    output('Excluded: %d invalid dates, %d non-personal events, %d eligible unlinked, %d ambiguous messages, %d group-only people omitted, %d conflicting existing mappings.' % (summary['invalidTimestamp'], summary['excluded'], summary['eligibleUnlinked'], summary['ambiguousMessages'], summary['groupOnlyOmitted'], summary['conflictingMappings']))
+    for number, card in enumerate(cards, 1):
+        output('%d. %s - %s' % (number, card['name'], card['discovery']))
+    output('Names and activity above are local only. Group activity is separate from direct outreach; counts do not measure relationship quality.')
+    output('Discovery does not change mappings, upload cursors or the sync schedule. Use discover-import to review selections before importing.')
+
 def main():
     parser = argparse.ArgumentParser(description='Local selective vCard import; phone/email matching stays on this Mac')
-    parser.add_argument('command', choices=['preview', 'import', 'resume', 'restore', 'cancel'])
+    parser.add_argument('command', choices=['preview', 'import', 'resume', 'restore', 'cancel', 'discover', 'discover-import'])
     parser.add_argument('--vcard')
+    parser.add_argument('--limit', type=int, default=10000)
+    parser.add_argument('--include-groups', action='store_true')
+    parser.add_argument('--include-mapped', action='store_true')
     parser.add_argument('--backup')
     parser.add_argument('--config', default=os.path.join(c.BASE, 'config.json'))
     args = parser.parse_args(); os.umask(0o077)
@@ -352,6 +440,14 @@ def main():
             safety = os.path.join(directory, 'contacts-backup-' + str(uuid.uuid4()) + '.json')
             atomic_json(safety, config); atomic_json(args.config, old)
         output('Mapping backup restored. No Homebase friends or Messages were deleted.'); return
+    discovery_cards = None
+    if args.command in ('discover', 'discover-import'):
+        book = parse_vcards(os.path.expanduser(args.vcard or ''), max_cards=10000, skip_invalid_names=True)
+        source = c.Source(config['database'])
+        discovery_cards, summary = discover_contacts(source, book, validated['_mapping'], limit=args.limit, include_groups=args.include_groups, include_mapped=args.include_mapped)
+        show_discovery(discovery_cards, summary)
+        if args.command == 'discover' or not discovery_cards:
+            return
     if config['endpoint'] != c.RELAY_ENDPOINT:
         raise ContactError('Pair the authenticated relay before contact import.')
     def send(payload):
@@ -364,7 +460,7 @@ def main():
     else:
         if os.path.exists(pending):
             raise ContactError('A saved import is pending. Use resume before starting another.')
-        cards = parse_vcards(os.path.expanduser(args.vcard or ''))
+        cards = discovery_cards if discovery_cards is not None else parse_vcards(os.path.expanduser(args.vcard or ''))
         roster = check_roster(send({'version': 1, 'action': 'list'}))
         plan = choose_plan(cards, roster, config)
         if not plan:

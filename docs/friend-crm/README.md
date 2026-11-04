@@ -1,3 +1,7 @@
+# Local message/contact discovery
+
+The Mac helper can now discover review candidates from the newest locally recorded message metadata and a local address-book export, then reuse selective names-only import. See MESSAGE_DISCOVERY.md. This needs only the updated Mac package; no Homebase/relay deployment, credentials or scheduling changes are required. No automatic friend importing is introduced.
+
 # Selected contact import update (deployed)
 
 The focused branch feat/selected-contact-import adds a local selective vCard helper plus a minimal signed names/IDs route. See CONTACT_IMPORT.md. It reuses the existing paired relay, keeps phone/email fields local, preserves existing friend records/settings, and does not change the running activity schedule. Homebase v20 and relay v4 were deployed with approval on November 4, 2026. Real selected-contact validation on the Mac is next. No database migration or new credential/service is required.
