@@ -1,0 +1,24 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';import {handleContactRequest} from '../lib/contact-import.ts';import {operate} from '../lib/operations';import {list} from '../lib/store';import {registerCollector,prepareRelay,revokeCollector,bodyDigest,crmStatus} from '../lib/crm-store.ts';
+const {env}=await import('cloudflare:workers');env.CRM_RELAY_MASTER='b'.repeat(64);env.CRM_INGEST_MASTER_KEY='a'.repeat(64);const now=Date.parse('2026-11-04T20:00:00Z');
+async function request(body,credentials,changes={}){const raw=JSON.stringify(body),stamp=String(now/1000),digest=await bodyDigest(raw),key=await crypto.subtle.importKey('raw',new TextEncoder().encode(credentials.signingKey),{name:'HMAC',hash:'SHA-256'},false,['sign']);const signature=Buffer.from(await crypto.subtle.sign('HMAC',key,new TextEncoder().encode('POST\n/api/crm/contacts\n'+stamp+'\n'+digest))).toString('hex');return new Request('https://homebase.example/api/crm/contacts',{method:'POST',headers:{'Content-Type':'application/json','X-CRM-Device':credentials.deviceId,'X-CRM-Time':stamp,'X-CRM-Signature':signature,...changes},body:raw});}
+async function credentials(owner){const device=await registerCollector(owner,'Synthetic contacts');return prepareRelay(owner,device.deviceId);}
+test('signed selective import lists minimal friends and creates idempotently without modifying existing friends or upload state',async()=>{
+ const key=await credentials('contacts-owner');const friend=await operate({action:'save',kind:'friend',data:{name:'Existing Synthetic',notes:'PRIVATE_NOTES',trackMessaging:true,reminderDays:12}},'contacts-owner');
+ await operate({action:'save',kind:'family',data:{name:'PRIVATE_PROFILE',role:'parent'}},'contacts-owner');
+ const roster=await handleContactRequest(await request({version:1,action:'list'},key),now);assert.equal(roster.status,200);const text=await roster.text();assert.ok(!text.includes('PRIVATE_NOTES'));assert.ok(!text.includes('PRIVATE_PROFILE'));const listed=JSON.parse(text).friends.find(f=>f.contactId===friend.id);assert.deepEqual(Object.keys(listed).sort(),['contactId','name','trackMessaging']);
+ const id=crypto.randomUUID(),selectionId=crypto.randomUUID(),body={version:1,action:'apply',selectionId,contacts:[{contactId:friend.id,name:friend.data.name,create:false},{contactId:id,name:'New Synthetic',create:true}]};
+ const first=await handleContactRequest(await request(body,key),now);assert.equal(first.status,200);const again=await handleContactRequest(await request(body,key),now);assert.deepEqual(await again.json(),await first.json());
+ const all=await list();assert.equal(all.filter(f=>f.id===id).length,1);assert.deepEqual(all.find(f=>f.id===friend.id),friend);assert.equal(all.find(f=>f.id===id).data.trackMessaging,true);assert.equal((await crmStatus('contacts-owner')).find(d=>d.id===key.deviceId).sequence,0);
+});
+test('contact route rejects unknown private fields, opt-out matching, invalid proofs, collisions, stale names and revoked devices',async()=>{
+ const key=await credentials('contacts-privacy');const friend=await operate({action:'save',kind:'friend',data:{name:'Opted out',trackMessaging:false}},'contacts-privacy');
+ const base={version:1,action:'apply',selectionId:crypto.randomUUID(),contacts:[{contactId:crypto.randomUUID(),name:'Synthetic',create:true}]};
+ for(const extra of [{handles:['PRIVATE_PHONE']},{email:'PRIVATE_EMAIL'},{notes:'PRIVATE_NOTE'},{photo:'PRIVATE_PHOTO'}]){const b={...base,contacts:[{...base.contacts[0],...extra}]};const r=await handleContactRequest(await request(b,key),now);assert.equal(r.status,400);assert.ok(!(await r.text()).includes('PRIVATE_'));}
+ assert.equal((await handleContactRequest(await request({...base,contacts:[{contactId:friend.id,name:friend.data.name,create:false}]},key),now)).status,409);
+ assert.equal((await handleContactRequest(await request({...base,contacts:[{contactId:crypto.randomUUID(),name:'Missing existing',create:false}]},key),now)).status,409);
+ assert.equal((await handleContactRequest(await request(base,key,{'X-CRM-Signature':'0'.repeat(64)}),now)).status,401);
+ assert.equal((await handleContactRequest(await request(base,key,{'X-CRM-Time':'1000000000'}),now)).status,401);
+ assert.equal((await handleContactRequest(await request(base,key,{'Content-Length':'50001'}),now)).status,413);
+ const collision=await operate({action:'save',kind:'grocery',data:{name:'Preserved grocery',quantity:1}},'contacts-privacy');assert.equal((await handleContactRequest(await request({...base,contacts:[{...base.contacts[0],contactId:collision.id}]},key),now)).status,409);assert.deepEqual((await list()).find(r=>r.id===collision.id),collision);
+ await revokeCollector('contacts-privacy',key.deviceId);assert.equal((await handleContactRequest(await request(base,key),now)).status,401);
+});

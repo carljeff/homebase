@@ -1,3 +1,7 @@
+# Selected contact import update (review pending)
+
+The focused branch feat/selected-contact-import adds a local selective vCard helper plus a minimal signed names/IDs route. See CONTACT_IMPORT.md. It reuses the existing paired relay, keeps phone/email fields local, preserves existing friend records/settings, and does not change the running activity schedule. Production remains unchanged until deployment is approved. No database migration or new credential/service is required.
+
 # Latest: authenticated upload relay
 
 An explicitly approved separate public Site now serves a single signed metadata intake route. Its source is tools/messages-crm/relay. The platform access token stays in that relay's runtime secret store and is forwarded only to the fixed private Homebase ingestion endpoint. Homebase's audience is preserved. Per-device relay keys are derived from a separate shared server-only master and issued only to the signed-in source owner. See MAC_SETUP.md first. Historical manual-only limitations below are superseded by the relay; automatic scheduling still requires a real successful manual relay upload and explicit activation.

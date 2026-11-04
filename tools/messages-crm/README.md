@@ -1,3 +1,10 @@
+# Selected contact import
+
+New local helper: `contacts.py preview --vcard ~/Downloads/Selected.vcf`, then `contacts.py import --vcard ~/Downloads/Selected.vcf`. Export only the chosen people from Mac Contacts. Select people and handles in Termius, link an existing friend or create a new approved name, and type IMPORT to confirm. Phone/email mappings stay local; only approved names/UUIDs cross the authenticated relay. No UUID typing or JSON editing is needed. Requires the selected-contact Homebase/relay update to be deployed first; existing pairing and scheduling are preserved.
+
+Private backup, outage resume, cancellation, rollback, supported vCards and exact instructions:
+https://github.com/carljeff/homebase/blob/feat/selected-contact-import/docs/friend-crm/CONTACT_IMPORT.md
+
 # Homebase Messages collector
 
 Update with `manage.py install` (preserves configuration; does not start a job). In Homebase Friends prepare relay credentials for your existing device. Run `collector.py pair`, enter the shown base sequence and paste the device key at the hidden prompt. No platform token is needed on the Mac. Pairing preserves contact mappings and replaces only local retry/cursor state; scheduling must be disabled.
