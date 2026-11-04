@@ -1,3 +1,9 @@
+# Local message-contact discovery — November 4, 2026
+
+Passed: 33 Python tests and 106 application tests. Nine new discovery tests cover bounded read-only metadata windows, byte-identical synthetic source preservation, direct/group separation, shared-handle ambiguity, deduplication and multi-handle counts, existing mappings/new observed handles, future reruns, larger local address books, offline CLI behavior and names-only import requests. All Mac scripts passed legacy Python grammar and ASCII-source checks; actual Python 2.7/High Sierra discovery remains to be validated by the user.
+
+No web/server/relay code or deployment is changed by this update. No real source database, Contacts export or identifiers were accessed. No mappings, cursors, Keychain entries or scheduled jobs were changed by the agent. Discovery defaults to local-only and never selects message text or attachments. Its bounded window uses newest recorded ROWIDs, not a guarantee of chronological send order when historical messages sync later. The ZIP still includes only six reviewed source/example files, with no private data.
+
 # Contact import publication — November 4, 2026
 
 Homebase v20 and relay v4 deployed successfully after explicit approval. The deployment checkout passed TypeScript, its application test suite and a fresh production build; relay tests (6) and artifact validation passed. Homebase retained custom household access and the relay retained its approved public audience. Existing runtime secret revisions stayed at 2 (Homebase) and 1 (relay); no migration or credential/schedule change was needed. No real contact import was executed by the agent. The updated Mac installer and first selected vCard preview/import still need the user's run.
