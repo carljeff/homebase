@@ -8,3 +8,8 @@ for(const f of readdirSync(new URL('../drizzle/',import.meta.url)).filter(f=>f.e
 function statement(sql,args=[]){return {bind(...values){return statement(sql,values)},async all(){return {results:sqlite.prepare(sql).all(...args)}},async first(){return sqlite.prepare(sql).get(...args)??null},async run(){return {meta:{changes:Number(sqlite.prepare(sql).run(...args).changes)}}}};}
 globalThis.__homebaseTestEnv={DB:{prepare:statement,async batch(statements){sqlite.exec('BEGIN');try{const result=[];for(const s of statements)result.push(await s.run());sqlite.exec('COMMIT');return result;}catch(e){sqlite.exec('ROLLBACK');throw e;}}}};
 registerHooks({resolve(specifier,context,nextResolve){if(specifier==='cloudflare:workers')return {url:'data:text/javascript,export const env = globalThis.__homebaseTestEnv;',shortCircuit:true};if(specifier.startsWith('.')&&context.parentURL?.startsWith('file:')&&!specifier.endsWith('.ts')&&!specifier.endsWith('.mjs')){const u=new URL(specifier+'.ts',context.parentURL);if(existsSync(fileURLToPath(u)))return nextResolve(u.href,context);}return nextResolve(specifier,context);}});
+// Explicit fixture enrollment only. Production code never imports this test helper.
+export function setFriendsOwnerForTest(user){
+ globalThis.__homebaseTestEnv.FRIENDS_OWNER_EMAIL='owner@example.test';
+ sqlite.prepare("INSERT INTO friends_access (slot,owner_id,email_digest,created_at) VALUES (1,?,?,?) ON CONFLICT(slot) DO UPDATE SET owner_id=excluded.owner_id,email_digest=excluded.email_digest").run(user,'b2096dbc5111b6305225657ffdfab205aaff1dfb30d71805aea56922b2cbb24f',new Date().toISOString());
+}

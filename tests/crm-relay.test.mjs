@@ -1,9 +1,10 @@
+import {setFriendsOwnerForTest} from './server-env.mjs';
 import {test} from 'node:test';import assert from 'node:assert/strict';import {DatabaseSync} from 'node:sqlite';import {readFileSync} from 'node:fs';import {execFileSync} from 'node:child_process';
 import {handle,deviceKey} from '../tools/messages-crm/relay/worker/index.js';
 const {env}=await import('cloudflare:workers');const {prepareRelay,registerCollector,ingestMessaging,crmStatus,revokeCollector,bodyDigest}=await import('../lib/crm-store.ts');const {operate}=await import('../lib/operations');
 test('synthetic collector snapshot passes relay and private ingestion with safe retries and revocation',async()=>{
  const master='b'.repeat(64);env.CRM_RELAY_MASTER=master;env.CRM_INGEST_MASTER_KEY='a'.repeat(64);
- const owner='relay-contract-owner',friend=await operate({action:'save',kind:'friend',data:{name:'Synthetic Relay Friend',trackMessaging:true}},owner),device=await registerCollector(owner,'Synthetic relay collector'),credentials=await prepareRelay(owner,device.deviceId);
+ const owner='relay-contract-owner';setFriendsOwnerForTest(owner);const friend=await operate({action:'save',kind:'friend',data:{name:'Synthetic Relay Friend',trackMessaging:true}},owner),device=await registerCollector(owner,'Synthetic relay collector'),credentials=await prepareRelay(owner,device.deviceId);
  assert.equal(credentials.signingKey,await deviceKey(master,device.deviceId));
  const db=new DatabaseSync(':memory:');db.exec(readFileSync('tools/messages-crm/relay/drizzle/0000_relay_limits.sql','utf8'));const relayEnv={CRM_RELAY_MASTER:master,HOMEBASE_ACCESS_TOKEN:'SYNTHETIC_SERVER_ONLY',DB:{prepare(sql){return {bind(...args){return {async run(){return {meta:{changes:Number(db.prepare(sql).run(...args).changes)}}}}}}}}};
  const payload=JSON.parse(execFileSync('python3',['tests/messages-crm/make_payload.py'],{encoding:'utf8',stdio:['ignore','pipe','pipe']}));payload.deviceId=device.deviceId;payload.contacts=payload.contacts.slice(0,1);payload.contacts[0].contactId=friend.id;

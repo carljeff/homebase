@@ -1,3 +1,9 @@
+# Owner-only Friends — November 4, 2026
+
+Development validation: 111 application tests passed, including owner/other-account store, API, MCP, signed ingestion/contact routes, takeover prevention, actual Page capability and desktop/mobile navigation. TypeScript, focused lint and the existing 33 Python tests passed. Production build is run as part of publication. Shared household regressions remain covered. Existing complete-repository lint issues are unchanged and outside scope.
+
+The rollout uses an additive policy table and a protected owner-email runtime setting, with stable visitor-ID enrollment from platform-authenticated identity. It does not modify legacy Friends records, source snapshots, keys, mapping files or sequence counters. A predeployment authenticated connector check recorded the existing Friends records in session memory for exact preservation comparison after publication; no names/notes/identifiers were printed or saved to source. No real second-account login is used; negative checks use synthetic authenticated identities.
+
 # Local message-contact discovery — November 4, 2026
 
 Passed: 33 Python tests and 106 application tests. Nine new discovery tests cover bounded read-only metadata windows, byte-identical synthetic source preservation, direct/group separation, shared-handle ambiguity, deduplication and multi-handle counts, existing mappings/new observed handles, future reruns, larger local address books, offline CLI behavior and names-only import requests. All Mac scripts passed legacy Python grammar and ASCII-source checks; actual Python 2.7/High Sierra discovery remains to be validated by the user.

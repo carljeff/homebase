@@ -1,3 +1,7 @@
+# Friends privacy update
+
+Friends is restricted to the configured Site owner's account. Existing records, activity, mappings and collector state are preserved; other household features remain shared. Browser, store, API, MCP and signed relay operations all enforce the policy. See OWNER_PRIVACY.md for enrollment, tests, future separate-account expansion and safe rollback.
+
 # Local message/contact discovery
 
 The Mac helper can now discover review candidates from the newest locally recorded message metadata and a local address-book export, then reuse selective names-only import. See MESSAGE_DISCOVERY.md. This needs only the updated Mac package; no Homebase/relay deployment, credentials or scheduling changes are required. No automatic friend importing is introduced.
