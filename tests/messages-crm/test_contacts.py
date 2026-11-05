@@ -73,3 +73,13 @@ class ContactsTest(unittest.TestCase):
   pending=os.path.join(self.directory,m.PENDING);m.atomic_json(pending,plan)
   with mock.patch.object(m.sys,'argv',['contacts.py','cancel','--config',self.config_path]),mock.patch.object(m,'read_input',return_value='CANCEL'),mock.patch.object(m.c,'transmit',side_effect=AssertionError('Cancel is local')),contextlib.redirect_stdout(io.StringIO()):m.main()
   self.assertFalse(os.path.exists(pending));self.assertTrue(os.path.exists(os.path.join(self.directory,'contacts-cancelled-'+plan['selectionId']+'.json')));self.assertEqual(m.load_private(self.config_path),changed)
+
+ def test_missing_fn_uses_structured_name_and_skips_only_unusable_cards(self):
+  Path(self.vcard).write_text('BEGIN:VCARD\nVERSION:3.0\nN:Example;Alice;M;Dr;Jr.\nTEL:+13175550101\nEND:VCARD\nBEGIN:VCARD\nVERSION:3.0\nTEL:+13175550102\nEND:VCARD\nBEGIN:VCARD\nFN:Missing Version\nTEL:+13175550103\nEND:VCARD\nBEGIN:VCARD\nVERSION:3.0\nFN:Preferred Name\nN:Ignored;Structured;;;\nTEL:+13175550104\nEND:VCARD\n');stats={};cards=m.parse_vcards(self.vcard,stats=stats);self.assertEqual([c['name'] for c in cards],['Dr Alice M Example Jr.','Preferred Name']);self.assertEqual(stats['cards'],4);self.assertEqual(stats['structuredNames'],1);self.assertEqual(stats['skippedNames'],1);self.assertEqual(stats['missingVersion'],1)
+ def test_structured_name_handles_escaping_unicode_and_version_whitespace(self):
+  Path(self.vcard).write_text('BEGIN:VCARD\nVERSION:3.0  \nN:Doe\\;Smith;Jos\u00e9;;;\nTEL:+13175550101\nEND:VCARD\n');self.assertEqual(m.parse_vcards(self.vcard)[0]['name'],'Jos\u00e9 Doe;Smith')
+  Path(self.vcard).write_text('BEGIN:VCARD\nVERSION:3\nFN:Legacy Version Alias\nTEL:+13175550101\nEND:VCARD\n');self.assertEqual(m.parse_vcards(self.vcard)[0]['name'],'Legacy Version Alias')
+ def test_vcard_info_outputs_counts_only_without_network_or_config(self):
+  Path(self.vcard).write_text('BEGIN:VCARD\nVERSION:3.0\nN:PRIVATE_SURNAME;PRIVATE_GIVEN;;;\nEMAIL:private@example.test\nNOTE:PRIVATE_NOTE\nEND:VCARD\n');out=io.StringIO()
+  with mock.patch.object(m.sys,'argv',['contacts.py','vcard-info','--vcard',self.vcard]),mock.patch.object(m.c,'transmit',side_effect=AssertionError('No network')),mock.patch.object(m.c,'Source',side_effect=AssertionError('No Messages database')),contextlib.redirect_stdout(out):m.main()
+  self.assertIn('1 cards, 1 usable, 1 structured-name fallbacks',out.getvalue());self.assertNotIn('PRIVATE_',out.getvalue());self.assertNotIn('private@example.test',out.getvalue())

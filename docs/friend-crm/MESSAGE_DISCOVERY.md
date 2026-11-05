@@ -16,7 +16,7 @@ Direct conversations are shown first, sorted by direct message count and last ac
 
 On the mini via VNC, open Contacts. Select the address-book cards to use for matching (all cards can be used for this **local lookup**), then File → Export → Export vCard. Save as **AllContacts.vcf** in Downloads. Disable exported photos and notes where available to keep the file small. The full address book is never uploaded; choosing it only makes local name lookup more complete.
 
-Supported: UTF-8 vCard 3.0/4.0, at most 20 MB and 10,000 usable cards. Folded UTF-8 lines and common phone/email forms are supported. Duplicate identical cards collapse. Cards without a valid display name or phone/email handle are omitted from discovery. Re-export older 2.1/quoted-printable text cards as UTF-8 v3/v4. The user controls this export; the helper does not read the Contacts database or change it.
+Supported: UTF-8 vCard 3.0/4.0, at most 20 MB and 10,000 usable cards. Folded UTF-8 lines and common phone/email forms are supported. Duplicate identical cards collapse. Cards without a usable FN can use their structured N name. Cards still lacking a usable name, version or matching handle are omitted and counted. Use contacts.py vcard-info with --vcard to see only these counts locally. Re-export older 2.1/quoted-printable text cards as UTF-8 v3/v4. The user controls this export; the helper does not read the Contacts database or change it.
 
 ```sh
 /bin/chmod 600 "$HOME/Downloads/AllContacts.vcf"

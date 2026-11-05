@@ -41,7 +41,7 @@ The installer preserves config, contact mappings, Keychain credentials, pending 
   --vcard "$HOME/Downloads/Selected.vcf"
 ```
 
-This shows local names and matching-handle counts. No configuration or Homebase records are changed, and Keychain/network are not used. Folded UTF-8 lines, escaped names, grouped Apple property names, multiple phone/email fields and tel: URIs are supported. Other fields are ignored. Exact duplicate cards collapse; invalid or unsupported input fails safely. Select at most 25 people per import. The selected export is capped at 20 MB and 200 usable cards.
+This shows local names and matching-handle counts. No configuration or Homebase records are changed, and Keychain/network are not used. Folded UTF-8 lines, escaped names, grouped Apple property names, multiple phone/email fields and tel: URIs are supported. Other fields are ignored. Exact duplicate cards collapse. A missing/invalid FN falls back to the structured N name; incomplete unnamed or unversioned cards are skipped and counted. Unsupported encodings/versions or malformed card boundaries still fail safely. The vcard-info command reports only counts, without names, handles, network access or configuration changes. Select at most 25 people per import. The selected export is capped at 20 MB and 200 usable cards.
 
 ## 4. Select, match and approve in Termius
 
