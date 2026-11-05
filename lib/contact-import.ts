@@ -1,3 +1,4 @@
+import {reviewSyncSchema,syncContactReview} from "./contact-review";
 import {isFriendsOwner} from "./friends-access";
 import {env} from 'cloudflare:workers';
 import {z} from 'zod';
@@ -6,7 +7,7 @@ import {bodyDigest,relayDeviceSecret} from './crm-store';
 const path='/api/crm/contacts';
 const name=z.string().trim().min(1).max(100).refine(v=>!/[\u0000-\u001f\u007f@]/.test(v)&&!/^\+?[\d\s().-]{7,}$/.test(v));
 const entry=z.object({contactId:z.string().uuid(),name,create:z.boolean()}).strict();
-export const contactRequestSchema=z.discriminatedUnion('action',[
+export const contactRequestSchema=z.discriminatedUnion('action',[reviewSyncSchema,
  z.object({version:z.literal(1),action:z.literal('list')}).strict(),
  z.object({version:z.literal(1),action:z.literal('apply'),selectionId:z.string().uuid(),contacts:z.array(entry).min(1).max(25)}).strict()
 ]);
@@ -22,6 +23,7 @@ export async function handleContactRequest(request:Request,now=Date.now()){
  const body=new TextDecoder('utf-8',{fatal:true}).decode(bytes),digest=await bodyDigest(body),key=await crypto.subtle.importKey('raw',new TextEncoder().encode(await relayDeviceSecret(id)),{name:'HMAC',hash:'SHA-256'},false,['sign']);
  const expected=Array.from(new Uint8Array(await crypto.subtle.sign('HMAC',key,new TextEncoder().encode('POST\n'+path+'\n'+stamp+'\n'+digest))),b=>b.toString(16).padStart(2,'0')).join('');let mismatch=0;for(let i=0;i<64;i++)mismatch|=expected.charCodeAt(i)^signature.charCodeAt(i);if(mismatch)return fail(401);
  let input:z.infer<typeof contactRequestSchema>;try{input=contactRequestSchema.parse(JSON.parse(body));}catch{return fail(400);}
+ if(input.action==='review-sync')return Response.json(await syncContactReview(input,id,device.owner_id,now),{headers:{'Cache-Control':'no-store'}});
  const friends=(await list(device.owner_id)).filter(r=>r.kind==='friend');
  if(input.action==='list')return Response.json({version:1,action:'list',friends:friends.map(f=>({contactId:f.id,name:f.data.name,trackMessaging:!!f.data.trackMessaging}))},{headers:{'Cache-Control':'no-store'}});
  if(new Set(input.contacts.map(c=>c.contactId)).size!==input.contacts.length)return fail(400);

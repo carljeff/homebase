@@ -372,7 +372,7 @@ def choose_plan(cards, roster, config, ask=None):
     output('New friends will have messaging metadata enabled. Existing notes and reminders are unchanged.')
     return plan if ask('Type IMPORT to approve, or Enter to cancel: ').strip() == 'IMPORT' else None
 
-def discover_contacts(source, cards, mapping, limit=10000, include_groups=False, include_mapped=False, now=None):
+def discover_contacts(source, cards, mapping, limit=10000, include_groups=False, include_mapped=False, now=None, outbound_only=False):
     if not 1 <= limit <= 50000:
         raise ContactError('Choose a message limit between 1 and 50000.')
     now = time.time() if now is None else now
@@ -402,6 +402,8 @@ def discover_contacts(source, cards, mapping, limit=10000, include_groups=False,
             summary['ambiguousMessages'] += 1
         message_people = set()
         for handle, kind, outgoing, stamp in entries:
+            if outbound_only and (kind != 'direct' or not outgoing):
+                continue
             matches = index.get(handle, set())
             if len(matches) != 1:
                 if matches: ambiguous_handles.add(handle)
@@ -453,6 +455,7 @@ def main():
     parser.add_argument('--limit', type=int, default=10000)
     parser.add_argument('--include-groups', action='store_true')
     parser.add_argument('--include-mapped', action='store_true')
+    parser.add_argument('--outbound-only', action='store_true', help='Only personal outgoing messages; excludes group-only and incoming-only senders')
     parser.add_argument('--backup')
     parser.add_argument('--config', default=os.path.join(c.BASE, 'config.json'))
     args = parser.parse_args(); os.umask(0o077)
@@ -495,7 +498,7 @@ def main():
     if args.command in ('discover', 'discover-import'):
         book = read_cards(os.path.expanduser(args.vcard or ''), max_cards=10000)
         source = c.Source(config['database'])
-        discovery_cards, summary = discover_contacts(source, book, validated['_mapping'], limit=args.limit, include_groups=args.include_groups, include_mapped=args.include_mapped)
+        discovery_cards, summary = discover_contacts(source, book, validated['_mapping'], limit=args.limit, include_groups=args.include_groups, include_mapped=args.include_mapped, outbound_only=args.outbound_only)
         show_discovery(discovery_cards, summary)
         if args.command == 'discover' or not discovery_cards:
             return

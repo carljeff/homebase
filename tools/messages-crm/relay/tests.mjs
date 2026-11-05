@@ -17,3 +17,11 @@ test('contact route forwards only names/IDs and rejects private request or respo
  assert.equal((await handle(await signed({version:1,action:'list'},{},now,path),env,async()=>Response.json({version:1,action:'list',friends:[{contactId:selectionId,name:'Synthetic Friend',trackMessaging:true,notes:'PRIVATE_NOTES'}]}),now)).status,502);
  const wrongPath=await signed(body,{},now,'/api/crm/ingest');assert.equal((await handle(wrongPath,env,()=>{throw Error('Must not forward');},now)).status,400);
 });
+
+test('outbound-review route rejects private fields and ambiguous receipts while retaining fixed authenticated forwarding',async()=>{
+ const path='/api/crm/contacts',c={candidateId:'a'.repeat(64),name:'Synthetic Outbound',directOut:1,lastOutgoing:'2026-11-04T17:00:00Z',existingContactId:null},body={version:1,action:'review-sync',candidates:[c],applied:[]};
+ const receipt={version:1,action:'review-sync',decisions:[{candidateId:c.candidateId,status:'approved',contactId:id}]};
+ const {env}=fixture();const response=await handle(await signed(body,{},now,path),env,async(url,options)=>{assert.equal(url,'https://homebase.carl-jeff.chatgpt.site/api/crm/contacts');assert.ok(options.headers['OAI-Sites-Authorization']);assert.deepEqual(JSON.parse(new TextDecoder().decode(options.body)),body);return Response.json(receipt);},now);assert.deepEqual(await response.json(),receipt);
+ for(const bad of [{...c,text:'PRIVATE_BODY'},{...c,handles:['PRIVATE_PHONE']},{...c,directOut:0},{...c,name:'synthetic@example.test'}]){const {env}=fixture();assert.equal((await handle(await signed({...body,candidates:[bad]}, {},now,path),env,()=>{throw Error('Must not forward');},now)).status,400);}
+ for(const decisions of [[{...receipt.decisions[0],notes:'PRIVATE'}],[...receipt.decisions,...receipt.decisions],[{...receipt.decisions[0],status:'ignored',contactId:id}]]){const {env}=fixture();assert.equal((await handle(await signed(body,{},now,path),env,async()=>Response.json({...receipt,decisions}),now)).status,502);}
+});
