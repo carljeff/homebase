@@ -6,15 +6,15 @@ This proof of concept follows the November 5 investigation with the revised text
 
 ## Run the functional prototype
 
-Use a supported desktop OS/browser and Node 22.13+ (Node 24 used in validation). Do not use the High Sierra Messages Mini: no update to the collector is needed. From a checkout of this PR:
+Use a supported desktop OS/browser, Node 24, and the repository-pinned pnpm 11.25.0. Do not use the High Sierra Messages Mini: no update to the collector is needed. From a checkout of this PR:
 
 ```sh
 git switch feat/synthetic-text-vault
-npm run install:ci
+pnpm install --frozen-lockfile
 node tools/family-vault-prototype/demo.mjs
 ```
 
-Skip dependency installation if already installed and unchanged. The harness builds locally using existing Vite/React dependencies. It prints a fresh **synthetic membership code** in your local terminal and serves:
+Skip dependency installation if already installed and unchanged. In the managed Linux Work environment, use the existing `npm run install:ci` installer instead; that installer requires Linux tools and must not be used on macOS. The harness builds locally using existing Vite/React dependencies. It prints a fresh **synthetic membership code** in your local terminal and serves:
 
 - Parent Family harness: http://127.0.0.1:5179
 - Isolated vault: http://127.0.0.1:8790
