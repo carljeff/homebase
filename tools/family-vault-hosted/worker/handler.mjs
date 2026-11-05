@@ -6,7 +6,7 @@ const hex=bytes=>Array.from(new Uint8Array(bytes),b=>b.toString(16).padStart(2,'
 const digest=async s=>hex(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s)));
 const token=()=>hex(crypto.getRandomValues(new Uint8Array(32)));
 const publicCredential=c=>({v:c.v,memberId:c.memberId,publicKey:c.publicKey,fingerprint:c.fingerprint});
-export const securityHeaders={'Cache-Control':'private, no-store','Pragma':'no-cache','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','Permissions-Policy':'camera=(), microphone=(), geolocation=()','Content-Security-Policy':"default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; frame-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'; object-src 'none'"};
+export const securityHeaders={'Cache-Control':'private, no-store','Pragma':'no-cache','X-Content-Type-Options':'nosniff','X-Frame-Options':'DENY','Cross-Origin-Resource-Policy':'same-origin','Referrer-Policy':'no-referrer','Permissions-Policy':'camera=(), microphone=(), geolocation=()','Content-Security-Policy':"default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; frame-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'; object-src 'none'"};
 export async function handle(request,env,assets,now=Date.now()){
  const reply=(status,data)=>Response.json(data,{status,headers:securityHeaders});
  try{
@@ -42,6 +42,8 @@ export async function handle(request,env,assets,now=Date.now()){
   if(url.pathname==='/api/lock'&&request.method==='POST'){if(!exact(body,''))return reply(400,{error:'Invalid request'});await env.DB.prepare('DELETE FROM demo_sessions WHERE token_digest=? AND owner_id=?').bind(hash,user).run();return reply(200,{locked:true});}
   const home=await env.DB.prepare('SELECT owner_id FROM demo_household WHERE slot=1').first();if(!home||primary&&home.owner_id!==user)return reply(403,{error:'Household unavailable'});const owner=home.owner_id;
   const membership=await env.DB.prepare('SELECT * FROM demo_members WHERE owner_id=? AND user_id=?').bind(owner,user).first();const isMember=primary||membership?.status==='approved';
+  // Recheck session and membership atomically with every previously unguarded write.
+  const writeGuard="EXISTS (SELECT 1 FROM demo_sessions WHERE token_digest=? AND owner_id=? AND last_seen>? AND expires_at>?) AND (?=1 OR EXISTS (SELECT 1 FROM demo_members WHERE owner_id=? AND user_id=? AND status='approved'))",writeArgs=[hash,user,now-idle,now,primary?1:0,owner,user];
   const stored=await env.DB.prepare('SELECT config_json FROM demo_vaults WHERE owner_id=?').bind(owner).first();const config=stored?JSON.parse(stored.config_json):null;
   if(url.pathname==='/api/state'&&request.method==='GET'){
    if(!isMember)return reply(200,{config:null,records:[],canInitialize:false,role:'second',membership:membership?{status:'pending',requestId:membership.request_id,credential:JSON.parse(membership.credential_json)}:null});
@@ -59,9 +61,9 @@ export async function handle(request,env,assets,now=Date.now()){
    if(!validPackage(body)||!config||body.vaultId!==config.vaultId)return reply(400,{error:'Invalid encrypted approval'});
    const row=await env.DB.prepare("SELECT * FROM demo_members WHERE owner_id=? AND request_id=? AND status='pending'").bind(owner,body.requestId).first();if(!row||row.user_id===user)return reply(409,{error:'Request changed'});const c=JSON.parse(row.credential_json);
    if(c.memberId!==body.recipientId||c.fingerprint!==body.fingerprint)return reply(409,{error:'Request changed'});
-   const result=await env.DB.prepare("UPDATE demo_members SET status='approved',package_json=? WHERE owner_id=? AND request_id=? AND status='pending' AND credential_json=? AND EXISTS (SELECT 1 FROM demo_vaults WHERE owner_id=? AND config_json=?)").bind(JSON.stringify(body),owner,body.requestId,row.credential_json,owner,stored.config_json).run();return reply(result.meta.changes?200:409,result.meta.changes?{approved:true}:{error:'Request changed'});
+   const result=await env.DB.prepare("UPDATE demo_members SET status='approved',package_json=? WHERE owner_id=? AND request_id=? AND status='pending' AND credential_json=? AND EXISTS (SELECT 1 FROM demo_vaults WHERE owner_id=? AND config_json=?) AND "+writeGuard).bind(JSON.stringify(body),owner,body.requestId,row.credential_json,owner,stored.config_json,...writeArgs).run();return reply(result.meta.changes?200:409,result.meta.changes?{approved:true}:{error:'Request changed'});
   }
-  if(url.pathname==='/api/reject'&&request.method==='POST'){if(!exact(body,'requestId')||!uuid.test(body.requestId))return reply(400,{error:'Invalid request'});await env.DB.prepare("DELETE FROM demo_members WHERE owner_id=? AND request_id=? AND status='pending'").bind(owner,body.requestId).run();return reply(200,{rejected:true});}
+  if(url.pathname==='/api/reject'&&request.method==='POST'){if(!exact(body,'requestId')||!uuid.test(body.requestId))return reply(400,{error:'Invalid request'});const rejected=await env.DB.prepare("DELETE FROM demo_members WHERE owner_id=? AND request_id=? AND status='pending' AND "+writeGuard).bind(owner,body.requestId,...writeArgs).run();return reply(rejected.meta.changes?200:409,rejected.meta.changes?{rejected:true}:{error:'Request changed'});}
   if(url.pathname==='/api/reset')return reply(409,{error:'Use the explicit erase confirmation flow'});
   if(url.pathname==='/api/erase'&&request.method==='POST'){
    const auth=await env.DB.prepare('SELECT expires_at FROM demo_sessions WHERE token_digest=? AND owner_id=?').bind(hash,user).first();if(!auth||now-(auth.expires_at-lifetime)>60000)return reply(401,{error:'Start erase confirmation again'});
@@ -88,7 +90,7 @@ export async function handle(request,env,assets,now=Date.now()){
    const result=await env.DB.prepare('INSERT INTO demo_records(owner_id,id,profile_id,revision,data_json,deleted) SELECT ?,?,?,?,?,0 WHERE EXISTS (SELECT 1 FROM demo_vaults WHERE owner_id=? AND config_json=?) AND EXISTS (SELECT 1 FROM demo_sessions WHERE token_digest=? AND owner_id=? AND expires_at>?) ON CONFLICT(owner_id,id) DO UPDATE SET revision=excluded.revision,data_json=excluded.data_json WHERE demo_records.deleted=0 AND demo_records.profile_id=excluded.profile_id AND demo_records.revision+1=excluded.revision').bind(owner,body.id,body.profileId,body.revision,JSON.stringify(body),owner,stored.config_json,hash,user,now).run();return reply(result.meta.changes?200:409,result.meta.changes?{saved:true}:{error:'Refresh before editing'});
   }
   if(url.pathname==='/api/records'&&request.method==='DELETE'){
-   if(!exact(body,'id revision')||!uuid.test(body.id)||!Number.isSafeInteger(body.revision))return reply(400,{error:'Invalid request'});const result=await env.DB.prepare("UPDATE demo_records SET deleted=1,data_json='{}' WHERE owner_id=? AND id=? AND revision=? AND deleted=0").bind(owner,body.id,body.revision).run();return reply(result.meta.changes?200:409,result.meta.changes?{deleted:true}:{error:'Refresh before deleting'});
+   if(!exact(body,'id revision')||!uuid.test(body.id)||!Number.isSafeInteger(body.revision))return reply(400,{error:'Invalid request'});const result=await env.DB.prepare("UPDATE demo_records SET deleted=1,data_json='{}' WHERE owner_id=? AND id=? AND revision=? AND deleted=0 AND "+writeGuard).bind(owner,body.id,body.revision,...writeArgs).run();return reply(result.meta.changes?200:409,result.meta.changes?{deleted:true}:{error:'Refresh before deleting'});
   }
   return reply(404,{error:'Unavailable in synthetic demo'});
  }catch{return reply(400,{error:'Demo request failed safely'});}

@@ -39,7 +39,7 @@ Site access is restricted to the configured adults; the Worker also independentl
 
 Exact-origin writes, no CORS, no-store, framing denial, restrictive CSP, bounded bodies, per-actor quotas, token expiry, revision checks and delete tombstones remain. Locks occur after two minutes idle, backgrounding and page exit; stale async crypto results cannot repopulate or submit after lock. JavaScript cannot guarantee secure memory erasure or revoke clipboard copies. Server sessions expire after two minutes idle and ten minutes absolute lifetime.
 
-This remains a standalone browser demo, not an embedded production Family-tab release. iPad testing of the single-user demo was user-confirmed; real two-account Safari behavior still needs testing by both adults. No paid service, subscription or additional dependency is introduced.
+This remains a standalone browser demo, not an embedded production Family-tab release. iPad testing of the single-user demo was user-confirmed; two-adult sharing has now been confirmed by the user. The new lifecycle hardening still needs actual-device regression. No paid service, subscription or additional dependency is introduced.
 
 ## Validation and review gates
 
@@ -47,7 +47,7 @@ Run:
 
 ```sh
 node scripts/bundle.mjs
-node --test tests.mjs sharing-tests.mjs
+node --test tests.mjs sharing-tests.mjs hardening-tests.mjs
 bash scripts/build.sh
 node scripts/validate-artifact.mjs
 ```
@@ -55,3 +55,7 @@ node scripts/validate-artifact.mjs
 From the Homebase checkout, `npm test` also runs the sharing/erase contracts and rendered two-client flow. Tests use synthetic identities/data only: separate-passphrase pairing, wrong password/fingerprint, public-key substitution after reload, pending/self/third-account access rejection, request replay, package tampering, same-key read/edit/delete, no password/plaintext request/database canaries, existing key preservation, fresh two-adult erase, wrong phrases, cancellation, session invalidation, and rendered request/approval/second-adult editing. Existing Kitchen/Family/Projects/Friends/MCP tests remain part of the suite. Automated tests are not an independent security audit and do not prove real browser SOP or OS key handling.
 
 Before real sensitive information: independent crypto/protocol review; real two-adult device tests; verified ingress/identity freshness; key lifecycle and selective revocation policy; deployment integrity; operational abuse controls; documented provider retention/deletion behavior; and a separate explicit production/data-entry approval. No backup/recovery implementation is planned under the revised scope.
+
+## Security hardening review
+
+See [SECURITY_REVIEW.md](SECURITY_REVIEW.md) for findings, fixes, release blockers and effort estimates. Local keys now expire after ten minutes even with activity, and every local lock attempts server-session revocation. Erase operations are tracked by the same lifecycle and cannot reopen after a delayed response following lock. No encryption format or database migration changes were required.

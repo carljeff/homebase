@@ -18,5 +18,13 @@ test('hosted private client initializes, encrypts edits, masks/reveals/copies, d
  const click=label=>[...$('records').querySelectorAll('button')].find(b=>b.textContent===label).click();click('Reveal');assert.match($('records').textContent,/DEMO: UI CANARY/);click('Hide');assert.doesNotMatch($('records').textContent,/UI CANARY/);click('Copy value');await wait(()=>copied!==null);assert.equal(copied,'DEMO: UI CANARY');
  click('Edit');$('editor').elements.namedItem('value').value='DEMO: EDITED';$('editor').onsubmit(submit());await wait(()=>app.inspect().records[0]?.revision===2);await wait(()=>$('editor').hidden);click('Reveal');assert.match($('records').textContent,/DEMO: EDITED/);click('Delete');assert.equal(app.inspect().records.length,1);click('Confirm delete');await wait(()=>app.inspect().records.length===0);await wait(()=>!$('records').querySelector('article'));
  $('add').click();$('editor').elements.namedItem('value').value='DEMO: CLEAR ON LOCK';const puts=requests.filter(r=>r.path==='/api/records').length;$('editor').onsubmit(submit());Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new window.Event('visibilitychange'));assert.equal($('inside').hidden,true);assert.equal($('editor').elements.namedItem('value').value,'');assert.equal($('records').textContent,'');assert.equal($('status').textContent,'Locked');await new Promise(r=>setTimeout(r,50));assert.equal(requests.filter(r=>r.path==='/api/records').length,puts);assert.equal(app.inspect().records.length,0);
+ // A response arriving after backgrounding must not restore an erase panel or bearer token.
+ Object.defineProperty(document,'hidden',{configurable:true,value:false});
+ const normalFetch=globalThis.fetch;let release=null;
+ globalThis.fetch=async(path,options)=>{const response=await normalFetch(path,options);if(path==='/api/erase')await new Promise(resolve=>{release=resolve;});return response;};
+ const pendingErase=$('reset').onclick();await wait(()=>release!==null);
+ Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new window.Event('visibilitychange'));release();await pendingErase;
+ assert.equal($('erase-panel').hidden,true);assert.equal($('status').textContent,'Locked');assert.equal(db.prepare('SELECT count(*) count FROM demo_vaults').get().count,1);
+ globalThis.fetch=normalFetch;
  Object.defineProperty(document,'hidden',{configurable:true,value:false});globalThis.confirm=()=>true;await $('reset').onclick();$('erase-phrase').value='ERASE DEMO';await $('erase-confirm').onclick();assert.equal(db.prepare('SELECT count(*) count FROM demo_vaults').get().count,0);assert.match($('status').textContent,/Demo erased/);
 });
