@@ -1,6 +1,6 @@
 import {test} from 'node:test';import assert from 'node:assert/strict';import {execFileSync} from 'node:child_process';import {readFileSync} from 'node:fs';import {registerHooks} from 'node:module';import ts from 'typescript';import {parseHTML} from 'linkedom';import {createElement,act} from 'react';
-registerHooks({load(url,context,next){if(url.endsWith('/app/friends.tsx'))return {format:'module',source:ts.transpileModule(readFileSync(new URL(url),'utf8'),{compilerOptions:{jsx:ts.JsxEmit.ReactJSX,module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText,shortCircuit:true};return next(url,context);}});
-const {document,window}=parseHTML('<html><body><div id="root"></div></body></html>');globalThis.document=document;globalThis.window=window;globalThis.IS_REACT_ACT_ENVIRONMENT=true;const {createRoot}=await import('react-dom/client');const {default:Friends}=await import('../app/friends.tsx');
+registerHooks({resolve(specifier,context,next){if(specifier==='./friend-memory'&&context.parentURL?.endsWith('/app/friends.tsx'))return next(new URL('./friend-memory.tsx',context.parentURL).href,context);return next(specifier,context);},load(url,context,next){if(url.endsWith('/app/friends.tsx')||url.endsWith('/app/friend-memory.tsx'))return {format:'module',source:ts.transpileModule(readFileSync(new URL(url),'utf8'),{compilerOptions:{jsx:ts.JsxEmit.ReactJSX,module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText,shortCircuit:true};return next(url,context);}});
+const {document,window}=parseHTML('<html><body><div id="root"></div></body></html>');document.oninput=null;globalThis.document=document;globalThis.window=window;globalThis.IS_REACT_ACT_ENVIRONMENT=true;const {createRoot}=await import('react-dom/client');const {default:Friends}=await import('../app/friends.tsx');
 test('friend UI keeps direct/group activity separate and hides activity for opted-out contacts',async()=>{const snapshot=JSON.parse(execFileSync('python3',['tests/messages-crm/make_payload.py'],{encoding:'utf8',stdio:['ignore','pipe','pipe']}));globalThis.fetch=async()=>({ok:true,json:async()=>[{id:snapshot.deviceId,label:'Synthetic Mac',enabled:true,isOwner:false,lastSuccess:snapshot.generatedAt,sequence:1,snapshot}]});const host=document.getElementById('root');const root=createRoot(host);const rows=[{id:snapshot.contacts[0].contactId,kind:'friend',version:1,updatedAt:snapshot.generatedAt,data:{name:'Synthetic Friend',notes:'',trackMessaging:true,reminderDays:null}}];await act(async()=>root.render(createElement(Friends,{rows,action:async()=>true,busy:false})));assert.match(host.textContent,/All observed direct: 2 incoming \/ 1 outgoing/);assert.match(host.textContent,/All observed group: 1 incoming \/ 1 outgoing/);assert.match(host.textContent,/not personal outreach/);assert.ok(!host.textContent.includes('PRIVATE_'));await act(async()=>root.render(createElement(Friends,{rows:[{...rows[0],data:{...rows[0].data,trackMessaging:false}}],action:async()=>true,busy:false})));assert.match(host.textContent,/Messaging tracking is off/);assert.doesNotMatch(host.textContent,/All observed direct/);await act(async()=>root.unmount());});
 test('manual import validates and previews before confirming',async()=>{const snapshot=JSON.parse(execFileSync('python3',['tests/messages-crm/make_payload.py'],{encoding:'utf8',stdio:['ignore','pipe','pipe']}));let uploads=[];globalThis.fetch=async(url,options)=>{if(url==='/api/crm/import')uploads.push(JSON.parse(options.body));return {ok:true,json:async()=>url==='/api/crm/import'?{accepted:true,duplicate:uploads.length>1}:[]};};const host=document.getElementById('root'),root=createRoot(host);await act(async()=>root.render(createElement(Friends,{rows:[],action:async()=>true,busy:false})));const input=host.querySelector('input[type="file"]');async function choose(value){Object.defineProperty(input,'files',{configurable:true,value:[{size:JSON.stringify(value).length,text:async()=>JSON.stringify(value)}]});await act(async()=>input.dispatchEvent(new window.Event('change',{bubbles:true})));}async function click(text){const b=[...host.querySelectorAll('button')].find(b=>b.textContent===text);assert.ok(b,text);await act(async()=>b.dispatchEvent(new window.Event('click',{bubbles:true})));}await choose({...snapshot,text:'PRIVATE_BODY_SENTINEL'});assert.match(host.textContent,/Invalid metadata file/);assert.equal(uploads.length,0);await choose(snapshot);assert.match(host.textContent,/Ready to review/);assert.equal(uploads.length,0);await click('Cancel import');await choose(snapshot);await click('Confirm metadata import');assert.deepEqual(uploads,[snapshot]);assert.match(host.textContent,/Metadata imported/);await choose(snapshot);await click('Confirm metadata import');assert.match(host.textContent,/Already imported/);await act(async()=>root.unmount());});
 test('friend overview sorts oldest first and collapses help and detailed metrics',async()=>{
@@ -36,4 +36,52 @@ test('birthday highlight overrides recency and birthday and partner edit without
  await act(async()=>[...host.querySelectorAll('button')].find(b=>b.textContent==='Clear birthday').dispatchEvent(new window.Event('click',{bubbles:true})));
  await act(async()=>host.querySelector('form').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true})));
  assert.equal(saved[1].data.birthday,null);assert.equal(saved[1].data.partner,'PRIVATE_PARTNER');await act(async()=>root.unmount());
+});
+
+test('Quick Add starts with only a name required, previews duplicates and uses a stable capture ID',async()=>{
+ globalThis.fetch=async()=>({ok:true,json:async()=>[]});const host=document.getElementById('root'),root=createRoot(host),calls=[];
+ await act(async()=>root.render(createElement(Friends,{rows:[],action:async p=>{calls.push(p);return false;},busy:false})));
+ await act(async()=>[...host.querySelectorAll('button')].find(b=>b.getAttribute('aria-label')==='Quick add person').click());
+ const form=host.querySelector('form');assert.equal(form.querySelectorAll('[required]').length,1);assert.equal(form.querySelector('details').hasAttribute('open'),false);
+ const name=form.querySelector('input');const setter=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(name),'value').set;
+ await act(async()=>{setter.call(name,'Synthetic Quick Entry');name.dispatchEvent(new window.Event('input',{bubbles:true}));});
+ await act(async()=>form.dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true})));
+ assert.equal(calls[0].data.name,'Synthetic Quick Entry');assert.equal(calls[0].action,'friend_quick_add');assert.ok(calls[0].data.metOn);
+ await act(async()=>form.dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true})));
+ assert.equal(calls[0].requestId,calls[1].requestId);
+ const existing={id:crypto.randomUUID(),kind:'friend',version:1,data:{name:'Synthetic Quick Entry',notes:'Existing memory',trackMessaging:false}};
+ await act(async()=>root.render(createElement(Friends,{rows:[existing],action:async()=>true,busy:false})));
+ assert.ok(host.querySelector('.friend-duplicates'));assert.equal([...host.querySelectorAll('button')].find(b=>b.textContent==='Add person').disabled,true);
+ await act(async()=>[...host.querySelectorAll('button')].find(b=>b.textContent==='Open Synthetic Quick Entry').click());assert.equal(host.querySelector('.friend-quick-add'),null);assert.equal(host.querySelector('form h3').textContent,'Edit friend');
+ await act(async()=>root.unmount());
+});
+
+test('relationship notes, search, views and suggestion dismissal use the current versioned contact',async()=>{
+ const {setFriendsOwnerForTest}=await import('./server-env.mjs'),{friendOperation}=await import('../lib/friend-operations.ts'),{householdToday}=await import('../lib/friend-memory.ts');
+ const owner='ui-memory-owner';setFriendsOwnerForTest(owner);const now=new Date(),today=householdToday(now);
+ let person=await friendOperation({action:'friend_quick_add',requestId:crypto.randomUUID(),data:{name:'UI Memory Person',meetingPlace:'Cycling event',metOn:today,notes:'Original general memory'}},owner,now);
+ person=await friendOperation({action:'friend_update',id:person.id,version:person.version,patch:{followUpOn:today,birthday:today.slice(5),partner:'Existing partner'}},owner,now);
+ const host=document.getElementById('root'),root=createRoot(host),calls=[];let pending=Promise.resolve();
+ const render=()=>root.render(createElement(Friends,{rows:[person],action:p=>{pending=(async()=>{calls.push(p);person=await friendOperation(p,owner,now);render();return true;})();return pending;},busy:false}));
+ const click=async text=>{const b=[...host.querySelectorAll('button')].find(b=>b.textContent===text);assert.ok(b,text);await act(async()=>{b.click();await pending;});};
+ const input=async(node,value)=>{const setter=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(node),'value').set;await act(async()=>{setter.call(node,value);node.dispatchEvent(new window.Event('input',{bubbles:true}));});};
+ globalThis.fetch=async()=>({ok:true,json:async()=>[]});await act(async()=>render());
+ try{
+ await click('Saw them today');assert.equal(person.data.lastInPerson,today);
+ await click('Add note');await input(host.querySelector('.friend-note-form textarea'),'Ask about camping');
+ await act(async()=>{host.querySelector('.friend-note-form').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));await pending;});
+ assert.equal(person.data.relationshipNotes.length,1);assert.equal(person.data.notes,'Original general memory');assert.equal(person.data.partner,'Existing partner');
+ const created=person.data.relationshipNotes[0].createdAt;
+ await click('Edit note');await input(host.querySelector('.friend-note-form textarea'),'Updated camping plans');
+ await act(async()=>{host.querySelector('.friend-note-form').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));await pending;});
+ assert.equal(person.data.relationshipNotes[0].createdAt,created);assert.equal(person.data.relationshipNotes[0].text,'Updated camping plans');
+ await input(host.querySelector('.friend-view-controls input'),'camping');assert.equal(host.querySelectorAll('.friend-card').length,1);
+ await input(host.querySelector('.friend-view-controls input'),'astronaut');assert.equal(host.querySelectorAll('.friend-card').length,0);
+ await input(host.querySelector('.friend-view-controls input'),'');await click('Recently met');assert.ok(host.querySelector('.friend-meeting-preview').textContent.includes('Cycling event'));
+ await click('Upcoming dates');assert.ok(host.querySelector('.friend-date-preview').textContent.includes('Birthday'));
+ await click('Stay connected');assert.ok(host.querySelector('.friend-suggestions').textContent.includes('You set a follow-up'));
+ await click('Dismiss');assert.equal(person.data.suggestionState[0].disposition,'dismissed');assert.equal(host.querySelectorAll('.friend-suggestions article').length,0);
+ await click('People');globalThis.confirm=()=>true;await click('Delete note');assert.equal(person.data.relationshipNotes.length,0);assert.equal(person.data.notes,'Original general memory');
+ assert.ok(calls.every(p=>p.id===person.id));assert.ok(calls.every(p=>Number.isInteger(p.version)));
+ }finally{await act(async()=>root.unmount());}
 });
