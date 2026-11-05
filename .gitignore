@@ -79,3 +79,7 @@ contacts-complete-*.json
 contacts-cancelled-*.json
 contacts-backup-*.json
 tools/messages-crm/relay/dist/
+
+# Private outbound-contact review settings and local handle cache.
+contact-review-settings.json
+contact-review-state.json

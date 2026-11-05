@@ -354,6 +354,17 @@ def main():
         run_collector(args, config, directory)
     finally:
         lock.close()
+    if args.command == 'sync' and args.scheduled and os.path.isfile(os.path.join(directory, 'contact-review-settings.json')):
+        # The optional review helper has its own explicit approval and cadence. A review
+        # failure never reverses or retries the acknowledged activity upload.
+        helper = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'review.py')
+        if os.path.isfile(helper):
+            try:
+                result = subprocess.call([sys.executable, helper, 'sync', '--scheduled', '--config', args.config], close_fds=True)
+            except OSError:
+                result = 1
+            if result:
+                print('Contact review needs attention; activity synchronization remains acknowledged.')
 
 def run_collector(args, config, directory):
     db = None

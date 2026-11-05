@@ -1,3 +1,10 @@
+# Homebase outbound-contact review inbox
+
+New optional `review.py` helper: local-only `dry-run --source contacts`, then explicit `sync --confirm-manual-sync` publishes names of people you directly messaged outbound in the last 90 days for Homebase approval. Incoming-only and group-only people are excluded. Approve/link/ignore in Friends; the next manual sync applies private local mappings. No raw handles or message content leave the Mini. Native Contacts access must be validated on High Sierra; vCard fallback is available. Review scheduling defaults off and requires a successful manual test plus separate `enable --approve-automation`; existing activity sync remains intact.
+
+Ordered update, privacy, automation, fallback and rollback instructions:
+https://github.com/carljeff/homebase/blob/feat/outbound-contact-inbox/docs/friend-crm/CONTACT_REVIEW.md
+
 # vCard compatibility update
 
 The parser now uses structured N names when FN is missing, normalizes version whitespace, and skips/counts incomplete unnamed or unversioned cards rather than blocking the whole export. Run `contacts.py vcard-info --vcard ~/Downloads/AllContacts.vcf` for a counts-only local check. It reads no Messages data, uses no credentials/network and changes nothing. Existing discover/import commands print the same parsing summary. Unsupported encodings/versions and malformed boundaries still fail safely.
