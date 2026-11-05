@@ -1,0 +1,1 @@
+ALTER TABLE `crm_devices` ADD `source_mode` text DEFAULT 'signed' NOT NULL;

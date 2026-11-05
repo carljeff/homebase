@@ -1,0 +1,7 @@
+{
+  "database": "~/Library/Messages/chat.db",
+  "device_id": "00000000-0000-4000-8000-000000000000",
+  "endpoint": "https://homebase.carl-jeff.chatgpt.site/api/crm/ingest",
+  "reconcile_hours": 24,
+  "contacts": []
+}

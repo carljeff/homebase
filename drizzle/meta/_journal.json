@@ -22,6 +22,20 @@
       "when": 1793216808439,
       "tag": "0002_silly_bushwacker",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1793812738068,
+      "tag": "0003_friend_crm_devices",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1793818115243,
+      "tag": "0004_crm_manual_import",
+      "breakpoints": true
     }
   ]
 }
