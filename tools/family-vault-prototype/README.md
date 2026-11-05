@@ -1,0 +1,87 @@
+# Synthetic text-only Family Vault prototype
+
+**LOCAL ONLY · NOT AUDITED · NO REAL SENSITIVE DATA · NOT DEPLOYED**
+
+This proof of concept follows the November 5 investigation with the revised text-only scope. There are no document uploads, files/attachments, PDF viewers, Bitwarden connections, new services or recurring fees. The encrypted JSON test export is a backup artifact, not an attachment feature.
+
+## Run the functional prototype
+
+Use a supported desktop OS/browser, Node 24, and the repository-pinned pnpm 11.25.0. Do not use the High Sierra Messages Mini: no update to the collector is needed. From a checkout of this PR:
+
+```sh
+git switch feat/synthetic-text-vault
+pnpm install --frozen-lockfile
+node tools/family-vault-prototype/demo.mjs
+```
+
+Skip dependency installation if already installed and unchanged. In the managed Linux Work environment, use the existing `npm run install:ci` installer instead; that installer requires Linux tools and must not be used on macOS. The harness builds locally using existing Vite/React dependencies. It prints a fresh **synthetic membership code** in your local terminal and serves:
+
+- Parent Family harness: http://127.0.0.1:5179
+- Isolated vault: http://127.0.0.1:8790
+
+Open the parent URL on the same computer. It renders the real `app/family.tsx` with five fake people: Alex Demo, Robin Demo, Sam Demo, Taylor Demo, Casey Demo. Ordinary profile writes are intentionally disabled in this harness. It never fetches production records or asks for a Homebase login.
+
+1. Open a fake profile and select **Secure Vault**.
+2. Enter the generated local membership code **inside the vault frame**. Choose a separate disposable TEST passphrase of 16–256 characters. Never use a real password.
+3. On first use only, select **Initialize a new synthetic vault**, then unlock. Subsequent unlocks use the same passphrase without initialization.
+4. Add a test record. Titles/values/notes/location must start `DEMO: `. Identifier values accept at most three digits; expiration dates must be in 2099. Examples: `DEMO: POLICY A`, `DEMO: P A123`, `DEMO: Physical safe`. These guardrails discourage accidental data entry; they cannot guarantee someone won't deliberately put real information into modified client code.
+5. Save; records are hidden by default. Exercise Reveal, Hide, Copy value, Edit, and Delete → Confirm delete. Copies remain outside vault control.
+6. Switch synthetic profiles; records remain organized by stable fake profile ID. Both adults' eventual access would be to the entire family vault, not separate per-person passwords.
+7. Leave the vault tab/profile, background the page, click Lock now, or wait two minutes without interaction. It must lock, clear forms/record DOM, and require membership/unlock again.
+8. Export an encrypted test backup if desired. It contains wrapped key metadata and ciphertext only. **Restore/import is disabled**, so this is a format demonstration, not a recoverability claim.
+9. Stop with Ctrl-C. All transport state is memory-only and is erased. Restart generates a new membership code and an empty demo vault. Losing the test passphrase has no recovery shortcut.
+
+Ports 5179 and 8790 must be free. Both servers bind only 127.0.0.1. Do not expose them through SSH forwarding, a public tunnel, LAN binding or a hosting service. The harness is HTTP on trusted loopback only; this is not a substitute for TLS on a real deployment. The default direct server can also be run with `node tools/family-vault-prototype/server.mjs http://127.0.0.1:5173` for an existing local Homebase dev preview; only the reserved fake profiles can mount it. Actual family profiles continue to show the disabled placeholder.
+
+The full harness is local-only, so it cannot be opened directly on another iPhone/iPad. Resize a desktop viewport for preliminary layout checks. Real Safari/iOS/mobile clipboard, framing and lock behavior require a separately approved private TLS test environment; no such environment was created. Rendered DOM tests are not a real browser security/compatibility test.
+
+## Implemented boundary
+
+- Homebase parent renders only a cross-origin frame and an opaque fake profile ID. It receives no password, membership token, keys, record fields or decrypt results. No postMessage bridge exists.
+- The frame requires development mode, a loopback parent and a reserved synthetic profile ID. Production builds cannot mount a functional frame. No production vault API, database migration or storage binding is added.
+- The vault has a separately generated local membership code (one synthetic member), a short-lived memory-only bearer session, and an independent vault passphrase. No cookies or persistent browser storage hold credentials or plaintext. Port separation is origin separation; this does not assert the `crossOriginIsolated` COOP/COEP capability.
+- Native **Web Crypto** performs PBKDF2-HMAC-SHA-256 (600,000 iterations), random 256-bit AES-GCM vault-key generation/wrapping and authenticated AES-GCM record encryption. Fresh random salts/96-bit IVs are generated by Web Crypto. Unwrapped keys are non-extractable. No encryption algorithm is implemented by application code, and no cryptographic CDN/dependency is introduced. This native maintained implementation does not make the application protocol independently audited.
+- Record authenticated context includes format/domain, vault ID, profile ID, record ID and revision. Key-wrap context includes member ID, vault ID, KDF/version/salt. Tampering/swapping fails authentication. Payloads include title/category/value/expiration/notes/location; all are encrypted together before transmission.
+- The separate Node transport stores only allowlisted encrypted envelopes in memory. It has no D1/R2/MCP bindings, ordinary Homebase API calls, filesystem data writes, request-body logging or decryption key. It cannot prove arbitrary ciphertext-shaped bytes were encrypted without keys; the tested client supplies that guarantee for its own writes.
+- All authenticated writes require the vault's exact Origin, JSON, bounded bodies and memory-only member authorization. Reads require authorization and a matching Origin or same-origin Fetch Metadata. Host checks prevent DNS rebinding to arbitrary names. No CORS access is granted. Expired credentials, unknown fields, alternate profiles and stale revisions fail closed; deleted IDs cannot be replay-created in the same process.
+- CSP restricts scripts/styles/network to the vault origin, forbids forms navigating/submitting to any destination, and permits framing only by the configured loopback parent. The frame sandbox allows only scripts, its own distinct origin, form event handling and an explicit encrypted download. It cannot navigate the parent or open arbitrary windows. Parent harness CSS uses inline styles for the existing UI; those permissions do not apply to the child vault.
+- Keys/record state and inputs clear on lock; pending crypto/network UI results are invalidated by a session generation. Inactivity uses elapsed wall-clock time and resumes fail closed. A server session expires after two minutes without authenticated requests independently of the client timer. JavaScript cannot guarantee secure memory erasure; malicious vault-origin code, extensions, compromised devices, screenshots and clipboard history remain threats.
+
+## Explicitly incomplete / disabled
+
+**This does not implement Jeff/Lindsay production membership.** One disposable synthetic member is used to demonstrate the encryption path. Ordinary Homebase identity headers cannot authenticate to this transport. The UI displays second-adult enrollment and recovery/import as disabled; endpoints do not exist. No shared password or developer-owned master key substitutes for those features.
+
+Proposed next protocol: each adult has independent signing/wrapping material protected by their own vault credential; one random family key is separately wrapped to both verified adults. Equal rights to all family records are explicit. Enrollment verifies public-key fingerprints out of band and authenticates membership changes to stop server key substitution. A strong offline random recovery key wraps recovery material; a complete encrypted backup must restore with an original account unavailable. Revocation needs authenticated membership changes, rotation and rewrapping/re-encryption as appropriate. Copies already retained cannot be revoked. These are design notes, not a reviewed/implemented protocol.
+
+Still required before real data:
+
+- Reviewed two-adult membership/enrollment, independent unlock, account/device revocation and lost-device recovery. Passkey integration requires device support testing and does not replace encryption-key design by itself.
+- Approved isolated TLS origin, independent release credentials, trusted ingress/session authorization, durable encrypted-only storage, quotas and safe backup retention. No reliance on editable Family `role` or Site membership alone.
+- Actual encrypted import/restore/recovery drill, rollback-resistant history and deletion/retention design. In-memory version checks do not protect against malicious whole-server rollback or a restart.
+- Production-grade KDF/device benchmarking, rate limits beyond local prototype scope, key rotation and crypto/library/build provenance review. Browser-provided crypto is maintained, but our composition and threat model need independent review.
+- Real desktop/iPhone/iPad browser tests, CSP/frame/cookie-policy tests in the chosen hosted environment, logging/telemetry canaries, dependency/update process and full account compromise tests.
+- Independent security assessment and separate explicit deployment/data-entry approval. No test pass should be described as a security audit.
+
+## Validation
+
+Commands:
+
+```sh
+npm test
+npm run typecheck
+npx eslint app/vault-prototype-frame.tsx tools/family-vault-prototype/*.mjs tools/family-vault-prototype/demo-entry.tsx tests/vault-prototype*.test.mjs
+node tools/family-vault-prototype/demo.mjs --smoke
+npm run build
+```
+
+**169 application tests passed**, including seven new vault tests. TypeScript and focused new-module/test lint passed. The normal Homebase production build and local harness build/smoke check passed; the existing linkedom build warning remains. No real browser/device security audit was performed.
+
+Seven new tests cover native encryption/wrapping/wrong passwords; contextual tampering/corruption; synthetic input/schema restrictions; nonmember/forged Homebase identity headers; cross-origin rejection; encrypted transport CRUD/version/tombstone handling; no plaintext record canaries in intercepted requests/responses/transport state; idle lock and stale async invalidation; real client rendered create/edit/reveal/hide/copy/delete/background locking; actual Family navigation for all five fake profiles; production/real-profile fail-closed gates; storage/logging-source boundaries. Existing vault/MCP boundary and shared Homebase tests continue to run. DOM tests use a simulated clipboard and browser DOM; CSP and SOP enforcement are not simulated as a real browser.
+
+The harness smoke check builds the actual Family component and verifies both local origins return HTTP 200 with no-store. Do not commit its generated `.demo-build` output, generated membership code or encrypted test exports.
+
+Reference primitives: https://www.w3.org/TR/webcrypto/ ; https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/unwrapKey ; https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html . PBKDF2 here is a portable native prototype choice, not a claim it is preferable to a properly benchmarked Argon2id production design.
+
+## Remaining effort estimate
+
+Removing documents simplifies the UI, storage and preview attack surface substantially. It does not remove key sharing/recovery and browser-code integrity work. Preliminary estimate: **3–6 engineering weeks** for production membership, recovery, hosted isolation, durable ciphertext storage, device testing and operational hardening, **plus independent review and remediation**. This is human engineering effort, not a promise of uninterrupted agent runtime or elapsed delivery time. Refine after a hosting/isolation and two-adult enrollment proof. No review, paid service or deployment has been purchased/authorized.
