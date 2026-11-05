@@ -1,5 +1,6 @@
 import {z} from 'zod';
-export const friendSchema=z.object({name:z.string().trim().min(1).max(100),notes:z.string().max(2000).default(''),trackMessaging:z.boolean().default(false),reminderDays:z.number().int().min(1).max(365).nullable().default(null)});
+export const birthdaySchema=z.string().regex(/^\d{2}-\d{2}$/).refine(value=>{const date=new Date('2000-'+value+'T00:00:00Z');return Number.isFinite(+date)&&date.toISOString().slice(5,10)===value;},'Choose a valid birthday');
+export const friendSchema=z.object({name:z.string().trim().min(1).max(100),notes:z.string().max(2000).default(''),birthday:birthdaySchema.nullable().default(null),partner:z.string().trim().max(100).default(''),trackMessaging:z.boolean().default(false),reminderDays:z.number().int().min(1).max(365).nullable().default(null)});
 const count=z.number().int().nonnegative().max(10000000);
 const timestamp=z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/).refine(v=>Number.isFinite(Date.parse(v))&&new Date(v).toISOString().replace('.000Z','Z')===v);
 const day=z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(v=>Number.isFinite(Date.parse(v))&&new Date(v+'T00:00:00Z').toISOString().slice(0,10)===v);
@@ -25,4 +26,23 @@ export function contactRecency(lastContact:string|null,now=new Date()){
  if(!lastContact||!Number.isFinite(Date.parse(lastContact)))return {tone:'unknown',label:'No contact recorded',days:null};
  const days=Math.max(0,Math.floor((now.getTime()-Date.parse(lastContact))/86400000));
  return {tone:days<=7?'recent':days<=30?'warm':'distant',label:days===0?'Today':days===1?'1 day ago':`${days} days ago`,days};
+}
+
+/** Calendar birthdays use the household timezone, without collecting birth years. */
+export function upcomingBirthday(birthday:string|null|undefined,now=new Date()){
+ if(!birthday||!birthdaySchema.safeParse(birthday).success)return null;
+ const parts=new Intl.DateTimeFormat('en-US',{timeZone:'America/Indiana/Indianapolis',year:'numeric',month:'numeric',day:'numeric'}).formatToParts(now);
+ const part=(type:string)=>Number(parts.find(p=>p.type===type)!.value);
+ const year=part('year'),today=Date.UTC(year,part('month')-1,part('day'));
+ const [month,day]=birthday.split('-').map(Number);
+ // Observe February 29 on February 28 in non-leap years.
+ const occurrence=(y:number)=>Date.UTC(y,month-1,Math.min(day,new Date(Date.UTC(y,month,0)).getUTCDate()));
+ let next=occurrence(year);if(next<today)next=occurrence(year+1);
+ const days=Math.round((next-today)/86400000);
+ return {days,upcoming:days<=7,label:days===0?'Birthday today':days===1?'Birthday tomorrow':`Birthday in ${days} days`};
+}
+export function compareFriendPriority(a:{name:string;lastContact:string|null;birthdayDays:number|null},b:{name:string;lastContact:string|null;birthdayDays:number|null}){
+ const priority=(days:number|null)=>days!==null&&days<=7?days:Number.POSITIVE_INFINITY;
+ const ap=priority(a.birthdayDays),bp=priority(b.birthdayDays);
+ return (ap===bp?0:ap<bp?-1:1)||compareContactRecency(a,b);
 }
