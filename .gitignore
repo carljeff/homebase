@@ -71,3 +71,11 @@ tools/messages-crm/config.json
 tools/messages-crm/metadata.sqlite*
 tools/messages-crm/*.log
 tools/messages-crm/AUTOMATION_APPROVED
+
+# Private address-book exports and local contact-import recovery files.
+*.vcf
+contacts-import.pending.json
+contacts-complete-*.json
+contacts-cancelled-*.json
+contacts-backup-*.json
+tools/messages-crm/relay/dist/

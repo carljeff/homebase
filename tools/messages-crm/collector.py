@@ -284,7 +284,11 @@ def setup_credentials():
 def shlex_quote(value):
     return "'" + value.replace("'", "'\\''") + "'"
 
-def transmit(body, config):
+def transmit(body, config, request_path='/api/crm/ingest'):
+    if request_path not in ('/api/crm/ingest', '/api/crm/contacts'):
+        raise CollectorFailure('Unsupported signed route')
+    if request_path == '/api/crm/contacts' and config['endpoint'] != RELAY_ENDPOINT:
+        raise CollectorFailure('Pair the authenticated relay before contact import')
     secret = keychain_read(SIGNING_SERVICE)
     relay = config['endpoint'] == RELAY_ENDPOINT
     gate = None if relay else keychain_read(GATE_SERVICE)
@@ -292,7 +296,7 @@ def transmit(body, config):
         raise ValueError('Invalid credentials')
     stamp = str(int(time.time()))
     digest = hashlib.sha256(body.encode('utf-8')).hexdigest()
-    signature = hmac.new(secret.encode('ascii'), ('POST\n/api/crm/ingest\n' + stamp + '\n' + digest).encode('ascii'), hashlib.sha256).hexdigest()
+    signature = hmac.new(secret.encode('ascii'), ('POST\n' + request_path + '\n' + stamp + '\n' + digest).encode('ascii'), hashlib.sha256).hexdigest()
     # High Sierra /dev/fd reopening can change the bytes curl reads. Use a closed,
     # mode-600 named file in the owned config directory, with cleanup on every exit.
     # Only metadata is written here. Credentials stay in memory/config stdin.
@@ -304,7 +308,7 @@ def transmit(body, config):
         headers = ['Content-Type: application/json', 'X-CRM-Device: ' + config['device_id'], 'X-CRM-Time: ' + stamp, 'X-CRM-Signature: ' + signature, 'X-CRM-Body-SHA256: ' + digest, 'X-CRM-Key-Tag: ' + hashlib.sha256(secret.encode('ascii')).hexdigest()]
         if not relay:
             headers.append('OAI-Sites-Authorization: Bearer ' + gate)
-        args = ['/usr/bin/curl', '--silent', '--show-error', '--fail', '--proto', '=https', '--tlsv1.2', '--connect-timeout', '15', '--max-time', '45', '--max-redirs', '0', '--config', '-', '--data-binary', '@' + payload_path, config['endpoint']]
+        args = ['/usr/bin/curl', '--silent', '--show-error', '--fail', '--proto', '=https', '--tlsv1.2', '--connect-timeout', '15', '--max-time', '45', '--max-redirs', '0', '--config', '-', '--data-binary', '@' + payload_path, config['endpoint'].rsplit('/', 1)[0] + '/contacts' if request_path == '/api/crm/contacts' else config['endpoint']]
         curl_config = ''.join('header = "' + h + '"\n' for h in headers)
         p = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
         out, unused = p.communicate(curl_config.encode('ascii'))
@@ -312,8 +316,12 @@ def transmit(body, config):
         payload_file.close()
         os.unlink(payload_path)
     if p.returncode:
+        if request_path == '/api/crm/contacts':
+            raise CollectorFailure('Contact request failed (curl status %d). No local mappings were changed; retry a saved plan with contacts.py resume.' % p.returncode)
         raise CollectorFailure('HTTPS request failed (curl status %d). The pending upload is preserved; check relay diagnostics before re-pairing.' % p.returncode)
     result = json.loads(out.decode('utf-8'))
+    if request_path == '/api/crm/contacts':
+        return result
     if result.get('accepted') is not True or result.get('digest') != digest:
         raise RuntimeError('Unexpected acknowledgement')
     return result

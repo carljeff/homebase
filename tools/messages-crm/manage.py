@@ -22,15 +22,23 @@ def main():
             os.makedirs(BASE, 0o700)
         if os.stat(BASE).st_uid != os.getuid():
             raise RuntimeError('Installation directory must be owned by this user')
-        for name in ['collector.py', 'manage.py', 'config.example.json', 'config.json', LABEL + '.plist.disabled', 'AUTOMATION_APPROVED']:
+        for name in ['collector.py', 'contacts.py', 'manage.py', 'config.example.json', 'config.json', LABEL + '.plist.disabled', 'AUTOMATION_APPROVED']:
             if os.path.islink(os.path.join(BASE, name)):
                 raise RuntimeError('Installation files must not be symlinks')
         os.chmod(BASE, 0o700)
         source = os.path.dirname(os.path.abspath(__file__))
-        for name in ['collector.py', 'manage.py', 'config.example.json']:
+        for name in ['collector.py', 'contacts.py', 'manage.py', 'config.example.json']:
             target = os.path.join(BASE, name)
             if os.path.realpath(os.path.join(source, name)) != os.path.realpath(target):
-                shutil.copyfile(os.path.join(source, name), target)
+                import tempfile
+                fd, staged = tempfile.mkstemp(prefix='.install-', dir=BASE)
+                os.close(fd)
+                try:
+                    shutil.copyfile(os.path.join(source, name), staged)
+                    os.chmod(staged, 0o600)
+                    os.rename(staged, target)
+                finally:
+                    if os.path.exists(staged): os.unlink(staged)
             os.chmod(target, 0o600)
         config = os.path.join(BASE, 'config.json')
         if not os.path.exists(config):
