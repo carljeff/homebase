@@ -57,3 +57,7 @@ Budget roughly **5–10 engineering days** for identity-provider feasibility, ke
 - W3C Web Cryptography API, security considerations: https://www.w3.org/TR/webcrypto-1/#security-considerations — script injection and hostile client delivery remain threats to unlocked cryptography.
 - OWASP Session Management Cheat Sheet: https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html — idle/absolute timeouts, server enforcement and sensitive-operation reauthentication.
 - NIST SP 800-63B, session management: https://pages.nist.gov/800-63-4/sp800-63b/session/ — overall/inactivity timeouts and reauthentication.
+
+## Follow-up verification
+
+See [REVIEW_HANDOFF.md](REVIEW_HANDOFF.md) for the checked two-user audience, user-confirmed iPad locking, 18 passing vault tests, provider documentation findings, an unsent support request and the independent-review scope. Provider retention and fresh-login support remain unverified; no real-data release is approved.
