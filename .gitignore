@@ -83,3 +83,6 @@ tools/messages-crm/relay/dist/
 # Private outbound-contact review settings and local handle cache.
 contact-review-settings.json
 contact-review-state.json
+
+# Disposable synthetic vault harness build
+tools/family-vault-prototype/.demo-build/
