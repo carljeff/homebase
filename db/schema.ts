@@ -18,3 +18,8 @@ export const importedRecipes=sqliteTable("imported_recipes",{
 export const crmDevices=sqliteTable('crm_devices',{
  id:text('id').primaryKey().notNull(),ownerId:text('owner_id').notNull(),sourceMode:text("source_mode").notNull().default("signed"),label:text('label').notNull(),enabled:integer('enabled').notNull().default(1),sequence:integer('sequence').notNull().default(0),digest:text('digest').notNull().default(''),snapshotJson:text('snapshot_json'),lastSuccessAt:text('last_success_at'),createdAt:text('created_at').notNull()
 },t=>[uniqueIndex('crm_one_active_owner').on(t.ownerId).where(sql`${t.enabled}=1`)]);
+
+// One Friends owner for this household Site; existing records/snapshots remain untouched.
+export const friendsAccess=sqliteTable('friends_access',{
+ slot:integer('slot').primaryKey().notNull(),ownerId:text('owner_id').notNull(),emailDigest:text('email_digest').notNull(),createdAt:text('created_at').notNull()
+});

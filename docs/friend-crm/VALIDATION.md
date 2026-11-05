@@ -1,3 +1,13 @@
+# Owner-only Friends publication — November 4, 2026
+
+Homebase v21 deployed successfully with the new additive policy table and runtime configuration revision 3. The owner's authenticated Homebase connector retained its existing Friends access and exact record contents after publication, confirming enrollment and preservation. No private names, notes or IDs were printed or committed. Runtime mailbox and credentials are server-side only. Custom household access remains unchanged. Real other-account login and postdeployment scheduled-upload observations are not represented as completed checks; the denial paths, owner retries and data/cursor preservation are covered by synthetic automated tests. No Mac update is required.
+
+# Owner-only Friends — November 4, 2026
+
+Development validation: 111 application tests passed, including owner/other-account store, API, MCP, signed ingestion/contact routes, takeover prevention, actual Page capability and desktop/mobile navigation. TypeScript, focused lint and the existing 33 Python tests passed. Production build is run as part of publication. Shared household regressions remain covered. Existing complete-repository lint issues are unchanged and outside scope.
+
+The rollout uses an additive policy table and a protected owner-email runtime setting, with stable visitor-ID enrollment from platform-authenticated identity. It does not modify legacy Friends records, source snapshots, keys, mapping files or sequence counters. A predeployment authenticated connector check recorded the existing Friends records in session memory for exact preservation comparison after publication; no names/notes/identifiers were printed or saved to source. No real second-account login is used; negative checks use synthetic authenticated identities.
+
 # Local message-contact discovery — November 4, 2026
 
 Passed: 33 Python tests and 106 application tests. Nine new discovery tests cover bounded read-only metadata windows, byte-identical synthetic source preservation, direct/group separation, shared-handle ambiguity, deduplication and multi-handle counts, existing mappings/new observed handles, future reruns, larger local address books, offline CLI behavior and names-only import requests. All Mac scripts passed legacy Python grammar and ASCII-source checks; actual Python 2.7/High Sierra discovery remains to be validated by the user.
