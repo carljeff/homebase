@@ -1,0 +1,6 @@
+export const ITERATIONS=600000;
+export const uuid=/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
+export function exact(value,keys){return value!==null&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).sort().join(',')===keys.split(' ').sort().join(',');}
+export function unb64(value,min,max=min){if(typeof value!=='string'||value.length>Math.ceil(max/3)*4||!/^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value))throw Error('Invalid encrypted envelope');const bytes=Uint8Array.from(atob(value),v=>v.charCodeAt(0));if(bytes.length<min||bytes.length>max)throw Error('Invalid encrypted envelope');return bytes;}
+export function validConfig(v){try{if(!exact(v,'v vaultId memberId kdf iterations salt iv wrappedKey')||v.v!==1||!uuid.test(v.vaultId)||v.memberId!=='demo-member-a'||v.kdf!=='PBKDF2-SHA256'||v.iterations!==ITERATIONS)return false;unb64(v.salt,16);unb64(v.iv,12);unb64(v.wrappedKey,48);return true;}catch{return false;}}
+export function validEnvelope(v){try{if(!exact(v,'v vaultId profileId id revision iv ciphertext')||v.v!==1||![v.vaultId,v.profileId,v.id].every(x=>uuid.test(x))||!Number.isSafeInteger(v.revision)||v.revision<1)return false;unb64(v.iv,12);unb64(v.ciphertext,17,16000);return true;}catch{return false;}}
