@@ -1,3 +1,5 @@
+import type {RecordItem} from "./domain";
+import {matchMealRecipes,uniqueKnownRecipe,recipeLinkSubstitutions} from "./recipe-matching";
 import {leftoverOptions,leftoverMeal} from "./leftovers";
 import {env} from "cloudflare:workers";
 import {z} from "zod";
@@ -8,7 +10,20 @@ import {suggestMeals,recipeSignals,weekOf} from "./meal-suggestions";
 const date=z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(d=>{try{return new Date(d+"T12:00:00Z").toISOString().slice(0,10)===d;}catch{return false;}},"Use a real calendar date");
 function today(rows:any[]){return new Intl.DateTimeFormat("en-CA",{timeZone:rows.find(r=>r.kind==="settings")?.data.timezone??"America/Indiana/Indianapolis",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());}
 async function stableId(text:string){const bytes=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(text));const h=Array.from(new Uint8Array(bytes),b=>b.toString(16).padStart(2,"0")).join("");return `${h.slice(0,8)}-${h.slice(8,12)}-4${h.slice(13,16)}-a${h.slice(17,20)}-${h.slice(20,32)}`;}
+export function knownMealRecipeData(data:{title?:string;substitutions?:unknown[];[key:string]:unknown},rows:RecordItem[]){
+ const recipe=uniqueKnownRecipe(typeof data.title==="string"?data.title:"",rows);if(!recipe)return data;
+ return {...data,recipeId:recipe.id,substitutions:recipeLinkSubstitutions(schemas.meal.shape.substitutions.parse(data.substitutions??[]),recipe,rows)};
+}
 export async function mealOperation(input:any,user:string){const rows=await list(),now=new Date().toISOString();const day=today(rows);const db=env.DB;if(!db)throw new Error("Database unavailable");
+ if(input.action==="match_meal_recipes"){const title=z.string().trim().min(1).max(200).parse(input.title);return matchMealRecipes(title,rows).map(m=>({recipeId:m.recipe.id,title:m.recipe.data.title,reason:m.reason,ambiguous:m.ambiguous,kind:m.kind}));}
+ if(input.action==="link_meal_recipe"){
+ const mealId=z.string().uuid().parse(input.mealId),version=z.number().int().positive().parse(input.version),recipeId=z.string().min(1).max(200).parse(input.recipeId);
+ const meal=rows.find(r=>r.kind==="meal"&&r.id===mealId),recipe=rows.find(r=>r.kind==="recipe"&&r.id===recipeId);if(!meal||!recipe)throw new Error("Meal or recipe is no longer available");if(meal.data.recipeId===recipeId)return meal;
+ if(meal.version!==version)throw new Error("Conflict: refresh the meal before linking a recipe");
+ if(meal.data.recipeId&&rows.some(r=>r.kind==="recipe"&&r.id===meal.data.recipeId))throw new Error("This meal already has a recipe. Use Meal options to replace it.");
+ const substitutions=recipeLinkSubstitutions(meal.data.substitutions??[],recipe,rows);
+ return save("meal",{...meal.data,recipeId,substitutions,...(meal.data.recipeId?{previousRecipeIds:[...(meal.data.previousRecipeIds??[]),meal.data.recipeId]}:{})},user,meal.id,version);
+ }
  if(input.action==="meal_suggestions"){
  const target=date.parse(input.date),requestId=z.string().uuid().parse(input.requestId);const result=suggestMeals(rows,target,{excludeIds:z.array(z.string().max(100)).max(5000).default([]).parse(input.excludeIds),seed:z.string().max(100).default(requestId).parse(input.seed)});
  const writes=[];for(const s of result.suggestions){const id=await stableId(requestId+"/"+s.id);const data=schemas.meal_event.parse({recipeId:s.id,type:"recommended",occurredOn:day,week:weekOf(target)});writes.push(db.prepare("INSERT OR IGNORE INTO records (id,kind,data,version,updated_at,updated_by) VALUES (?,'meal_event',?,1,?,?)").bind(id,JSON.stringify(data),now,user));}if(writes.length)await db.batch(writes);return {...result,leftoverOptions:leftoverOptions(rows,target)};
