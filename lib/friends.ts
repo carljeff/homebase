@@ -1,6 +1,8 @@
 import {z} from 'zod';
+import {relationshipFields} from './friend-memory-schema';
 export const birthdaySchema=z.string().regex(/^\d{2}-\d{2}$/).refine(value=>{const date=new Date('2000-'+value+'T00:00:00Z');return Number.isFinite(+date)&&date.toISOString().slice(5,10)===value;},'Choose a valid birthday');
-export const friendSchema=z.object({name:z.string().trim().min(1).max(100),notes:z.string().max(2000).default(''),birthday:birthdaySchema.nullable().default(null),partner:z.string().trim().max(100).default(''),trackMessaging:z.boolean().default(false),reminderDays:z.number().int().min(1).max(365).nullable().default(null)});
+export const friendSchema=z.object({...relationshipFields,name:z.string().trim().min(1).max(100),notes:z.string().max(2000).default(''),birthday:birthdaySchema.nullable().default(null),partner:z.string().trim().max(100).default(''),trackMessaging:z.boolean().default(false),reminderDays:z.number().int().min(1).max(365).nullable().default(null)});
+export type FriendData=z.infer<typeof friendSchema>;
 const count=z.number().int().nonnegative().max(10000000);
 const timestamp=z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/).refine(v=>Number.isFinite(Date.parse(v))&&new Date(v).toISOString().replace('.000Z','Z')===v);
 const day=z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(v=>Number.isFinite(Date.parse(v))&&new Date(v+'T00:00:00Z').toISOString().slice(0,10)===v);

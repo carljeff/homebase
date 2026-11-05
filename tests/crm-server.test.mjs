@@ -41,3 +41,15 @@ test('relay preparation preserves metrics, restricts credentials to owners, and 
  await manualMode('relay-owner',device.deviceId);assert.equal((await ingestMessaging(await sign(JSON.stringify({...next,sequence:4}),credentials),now)).status,401);
  await revokeCollector('relay-owner',device.deviceId);await assert.rejects(()=>prepareRelay('relay-owner',device.deviceId));
 });
+
+test('signed metadata ingestion preserves full relationship memory and cannot introduce relationship fields',async()=>{
+ const {friendOperation}=await import('../lib/friend-operations.ts');const {list}=await import('../lib/store.ts');
+ const {contact,device,snapshot}=await fixture('memory-ingest-owner');
+ let friend=await friendOperation({action:'friend_update',id:contact.id,version:contact.version,patch:{birthday:'05-17',partner:'PRIVATE_PARTNER',children:'PRIVATE_CHILD',occupation:'PRIVATE_OCCUPATION',phone:'3175550108'}},'memory-ingest-owner',new Date(now));
+ friend=await friendOperation({action:'friend_note_save',id:friend.id,version:friend.version,note:{id:crypto.randomUUID(),date:'2026-11-04',text:'PRIVATE_MEMORY'}},'memory-ingest-owner',new Date(now));
+ const before=(await list('memory-ingest-owner')).find(r=>r.id===friend.id);
+ assert.equal((await ingestMessaging(await sign(JSON.stringify(snapshot),device),now)).status,200);
+ assert.deepEqual((await list('memory-ingest-owner')).find(r=>r.id===friend.id),before);
+ for(const field of ['relationshipNotes','children','phone','occupation','partner']){const unsafe={...snapshot,sequence:2,contacts:[{...snapshot.contacts[0],[field]:'PRIVATE_SENTINEL'}]};assert.equal((await ingestMessaging(await sign(JSON.stringify(unsafe),device),now)).status,400);}
+ const status=JSON.stringify(await crmStatus('memory-ingest-owner'));assert.ok(!status.includes('PRIVATE_'));assert.ok(!status.includes('3175550108'));
+});
