@@ -14,3 +14,15 @@ export function communicationMetrics(contact:ContactMessaging,now=new Date()){
  const lastAny=[lastDirect,contact.group.lastIncoming,contact.group.lastOutgoing].filter((s):s is string=>s!==null).sort().pop()??null;
  return {lastInteraction:lastAny,lastDirect,daysSinceOutgoing:contact.direct.lastOutgoing?Math.max(0,Math.floor((now.getTime()-Date.parse(contact.direct.lastOutgoing))/dayMs)):null,seven:window(7),thirty:window(30),ninety:window(90),previousThirty:window(30,30)};
 }
+
+/** Unknown history comes first; newest observed contact comes last. */
+export function compareContactRecency(a:{name:string;lastContact:string|null},b:{name:string;lastContact:string|null}){
+ const time=(value:string|null)=>value&&Number.isFinite(Date.parse(value))?Date.parse(value):Number.NEGATIVE_INFINITY;
+ const at=time(a.lastContact),bt=time(b.lastContact);
+ return (at===bt?0:at<bt?-1:1)||a.name.localeCompare(b.name);
+}
+export function contactRecency(lastContact:string|null,now=new Date()){
+ if(!lastContact||!Number.isFinite(Date.parse(lastContact)))return {tone:'unknown',label:'No contact recorded',days:null};
+ const days=Math.max(0,Math.floor((now.getTime()-Date.parse(lastContact))/86400000));
+ return {tone:days<=7?'recent':days<=30?'warm':'distant',label:days===0?'Today':days===1?'1 day ago':`${days} days ago`,days};
+}
