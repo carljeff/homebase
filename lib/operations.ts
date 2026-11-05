@@ -4,7 +4,7 @@ import {saveWalmartProduct} from "./walmart-store";
 import {assertOrdinaryInput} from "./vault-boundary";
 import {familySave,assertFamilyDelete,ensureProfiles} from "./family-store";
 import {visibleFamilyRows} from "./family";
-import { mealOperation } from "./meal-operations";
+import { mealOperation,knownMealRecipeData } from "./meal-operations";
 import { importCmt } from "./cmt-store";
 import { z } from "zod";
 import { list,save,remove } from "./store";
@@ -14,10 +14,10 @@ export async function operate(input:any,user:string){
  if(typeof input.action==="string"&&input.action.startsWith("friend_"))return friendOperation(input,user);
  if(["save_family_measurement","archive_family_measurement","restore_family_measurement"].includes(input.action))return growthOperation(input,user);
  if(input.action==="ensure_family"||(input.action==="save"&&input.kind==="settings"&&input.data?.familyOperation?.action==="ensure_profiles"))return ensureProfiles(input.profiles?input:input.data.familyOperation,user);
- if(["meal_suggestions","plan_recipe","plan_leftovers","meal_feedback"].includes(input.action))return mealOperation(input,user);
+ if(["meal_suggestions","plan_recipe","plan_leftovers","meal_feedback","match_meal_recipes","link_meal_recipe"].includes(input.action))return mealOperation(input,user);
  const op=z.enum(["list","save","delete","generate_groceries","import_recipes"]).parse(input.action);
  if(op==="list")return visibleFamilyRows(await list(user),user);
- if(op==="save"){if(input.kind==="friend")return saveFriend(input,user);if(input.kind==="walmart_product")return saveWalmartProduct(input,user);if(["family","wishlist"].includes(input.kind))return familySave(input.kind,input.data,user,input.id,input.version);if(input.kind==="meal"&&input.data?.status==="cooked"){const d=input.data.cookedDate||input.data.date;const settings=(await list()).find(r=>r.kind==="settings");const today=new Intl.DateTimeFormat("en-CA",{timeZone:settings?.data.timezone??"America/Indiana/Indianapolis",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());if(d>today)throw new Error("Confirmed cooking cannot be in the future");}return save(input.kind as Kind,input.data,user,input.id,input.version);}
+ if(op==="save"){if(input.kind==="meal"&&!input.id&&input.data?.type==="cook"&&!input.data.recipeId){input={...input,data:knownMealRecipeData(input.data,await list())};}if(input.kind==="friend")return saveFriend(input,user);if(input.kind==="walmart_product")return saveWalmartProduct(input,user);if(["family","wishlist"].includes(input.kind))return familySave(input.kind,input.data,user,input.id,input.version);if(input.kind==="meal"&&input.data?.status==="cooked"){const d=input.data.cookedDate||input.data.date;const settings=(await list()).find(r=>r.kind==="settings");const today=new Intl.DateTimeFormat("en-CA",{timeZone:settings?.data.timezone??"America/Indiana/Indianapolis",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());if(d>today)throw new Error("Confirmed cooking cannot be in the future");}return save(input.kind as Kind,input.data,user,input.id,input.version);}
  if(op==="delete"){const row=(await list(user)).find(r=>r.id===input.id);assertFamilyDelete(row,user);await remove(z.string().uuid().parse(input.id),z.number().int().positive().parse(input.version),user);return {ok:true};}
  if(op==="import_recipes"&&input.data?.format==="copymethat")return importCmt(input,user);
  if(op==="import_recipes"){const recipes=z.array(z.unknown()).max(50).parse(input.recipes);const {schemas}=await import("./domain");const valid=recipes.map(r=>schemas.recipe.parse(r));const result=[];for(const r of valid)result.push(await save("recipe",r,user));return result;}
