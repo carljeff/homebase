@@ -1,3 +1,9 @@
+# vCard name fallback and diagnostics — November 4, 2026
+
+The user reported a VERSION/FN error and approximately 166 vCard-3 version entries. The real file was not requested/accessed, so its exact missing-field condition is not claimed verified. Parser improvements handle missing FN through structured N, trim version whitespace, normalize the narrow legacy 3/4 version aliases, and skip/count unversioned or unusably named cards. Unsupported versions/encodings and malformed boundaries remain rejected. New vcard-info prints aggregate counts only and requires no configuration, Messages, Keychain or network access.
+
+Validation: 36 Python tests and 111 application tests passed, plus legacy Python grammar and ASCII-source checks. New tests cover structured prefixes/middle/family/suffixes, escaped semicolons, Unicode, preferred FN, incomplete cards, version whitespace/aliases and counts-only privacy. This is a Mac-package-only update; no production service, ownership policy, signing key, mappings or schedule changes are made. Real-file parsing is pending the user's local check.
+
 # Owner-only Friends publication — November 4, 2026
 
 Homebase v21 deployed successfully with the new additive policy table and runtime configuration revision 3. The owner's authenticated Homebase connector retained its existing Friends access and exact record contents after publication, confirming enrollment and preservation. No private names, notes or IDs were printed or committed. Runtime mailbox and credentials are server-side only. Custom household access remains unchanged. Real other-account login and postdeployment scheduled-upload observations are not represented as completed checks; the denial paths, owner retries and data/cursor preservation are covered by synthetic automated tests. No Mac update is required.

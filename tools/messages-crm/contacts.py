@@ -44,7 +44,29 @@ def content_line(value):
             return value[:i], value[i + 1:]
     raise ContactError('Malformed vCard line. Export selected contacts as UTF-8 vCard 3.0 or 4.0.')
 
-def parse_vcards(path, max_cards=200, skip_invalid_names=False):
+def structured_name(value):
+    parts, current, escaped = [], [], False
+    for ch in value:
+        if escaped:
+            current.extend(['\\', ch]); escaped = False
+        elif ch == '\\':
+            escaped = True
+        elif ch == ';':
+            parts.append(unescape(''.join(current))); current = []
+        else:
+            current.append(ch)
+    if escaped:
+        current.append('\\')
+    parts.append(unescape(''.join(current)))
+    parts += [''] * max(0, 5 - len(parts))
+    return ' '.join(' '.join(parts[j].split()) for j in [3, 1, 2, 0, 4] if parts[j].strip())
+
+
+def parse_vcards(path, max_cards=200, skip_invalid_names=True, stats=None):
+    stats = {} if stats is None else stats
+    stats.update(cards=0, usable=0, missingVersion=0, skippedNames=0, structuredNames=0, noHandles=0, duplicates=0)
+    if not os.path.isfile(path):
+        raise ContactError('vCard file not found. Check the --vcard path and filename.')
     if os.path.getsize(path) > 20000000:
         raise ContactError('vCard exceeds 20 MB. Export fewer contacts without photos.')
     with open(path, 'rb') as src:
@@ -68,23 +90,37 @@ def parse_vcards(path, max_cards=200, skip_invalid_names=False):
         if line.upper() == 'BEGIN:VCARD':
             if current is not None:
                 raise ContactError('Nested vCards are not supported.')
-            current = {'names': [], 'handles': [], 'version': None}
+            current = {'names': [], 'structured': [], 'handles': [], 'version': None}
             continue
         if line.upper() == 'END:VCARD':
-            if current is None or current['version'] not in ('3.0', '4.0'):
-                raise ContactError('A card lacks a supported VERSION/FN. Export vCard 3.0 or 4.0.')
-            name = ' '.join(unescape(current['names'][0]).split()) if current['names'] else ''
+            if current is None:
+                raise ContactError('Unexpected END:VCARD; export a fresh vCard file.')
+            stats['cards'] += 1
+            if current['version'] is None:
+                stats['missingVersion'] += 1; current = None; continue
+            if current['version'] not in ('3.0', '4.0'):
+                raise ContactError('Unsupported vCard version. Re-export as UTF-8 vCard 3.0 or 4.0.')
+            name = next((' '.join(unescape(v).split()) for v in current['names'] if valid_name(' '.join(unescape(v).split()))), '')
+            if not name:
+                name = next((structured_name(v) for v in current['structured'] if valid_name(structured_name(v))), '')
+                if name:
+                    stats['structuredNames'] += 1
             if not valid_name(name):
+                stats['skippedNames'] += 1
                 if skip_invalid_names:
                     current = None
                     continue
-                raise ContactError('A contact name is invalid or contains an email/phone. Correct its display name locally first.')
+                raise ContactError('A contact lacks a usable display name; no contact details were printed.')
             handles = sorted(set(current['handles']))
             if handles:
                 card = {'name': name, 'handles': handles}
                 identity = (name, tuple(handles))
                 if identity not in seen_cards:
-                    cards.append(card); seen_cards.add(identity)
+                    cards.append(card); seen_cards.add(identity); stats['usable'] += 1
+                else:
+                    stats['duplicates'] += 1
+            else:
+                stats['noHandles'] += 1
             current = None
             if len(cards) > max_cards:
                 raise ContactError('Export exceeds the supported contact-card limit; split the local export.')
@@ -94,12 +130,14 @@ def parse_vcards(path, max_cards=200, skip_invalid_names=False):
         header, value = content_line(line)
         field = header.split(';', 1)[0].split('.')[-1].upper()
         if field == 'VERSION':
-            current['version'] = value
-        elif field in ('FN', 'TEL', 'EMAIL'):
+            current['version'] = {'3': '3.0', '4': '4.0'}.get(value.strip(), value.strip())
+        elif field in ('FN', 'N', 'TEL', 'EMAIL'):
             if 'ENCODING=' in header.upper() or 'CHARSET=' in header.upper():
                 raise ContactError('Encoded text fields are unsupported. Export UTF-8 vCard 3.0/4.0.')
             if field == 'FN':
                 current['names'].append(value)
+            elif field == 'N':
+                current['structured'].append(value)
             else:
                 value = unescape(value).strip()
                 if field == 'TEL' and value.lower().startswith('tel:'):
@@ -118,8 +156,18 @@ def parse_vcards(path, max_cards=200, skip_invalid_names=False):
     if current is not None:
         raise ContactError('Unterminated vCard.')
     if not cards:
-        raise ContactError('No cards with valid phone/email handles were found.')
+        raise ContactError('No usable cards remain. A supported version, display/structured name, and phone/email handle are required.')
     return cards
+
+def read_cards(path, max_cards=200):
+    stats = {}
+    try:
+        return parse_vcards(path, max_cards=max_cards, stats=stats)
+    finally:
+        if stats:
+            output('vCard summary: %d cards, %d usable, %d structured-name fallbacks.' % (stats['cards'], stats['usable'], stats['structuredNames']))
+            output('Skipped: %d missing version, %d missing/invalid names, %d without matching handles, %d duplicates.' % (stats['missingVersion'], stats['skippedNames'], stats['noHandles'], stats['duplicates']))
+
 
 def selected_numbers(value, maximum, default_all=False):
     if not value.strip():
@@ -400,7 +448,7 @@ def show_discovery(cards, summary):
 
 def main():
     parser = argparse.ArgumentParser(description='Local selective vCard import; phone/email matching stays on this Mac')
-    parser.add_argument('command', choices=['preview', 'import', 'resume', 'restore', 'cancel', 'discover', 'discover-import'])
+    parser.add_argument('command', choices=['preview', 'import', 'resume', 'restore', 'cancel', 'discover', 'discover-import', 'vcard-info'])
     parser.add_argument('--vcard')
     parser.add_argument('--limit', type=int, default=10000)
     parser.add_argument('--include-groups', action='store_true')
@@ -408,8 +456,11 @@ def main():
     parser.add_argument('--backup')
     parser.add_argument('--config', default=os.path.join(c.BASE, 'config.json'))
     args = parser.parse_args(); os.umask(0o077)
+    if args.command == 'vcard-info':
+        read_cards(os.path.expanduser(args.vcard or ''), max_cards=10000)
+        return
     if args.command == 'preview':
-        for number, card in enumerate(parse_vcards(os.path.expanduser(args.vcard or '')), 1):
+        for number, card in enumerate(read_cards(os.path.expanduser(args.vcard or '')), 1):
             output('%d. %s (%d handles; local only)' % (number, card['name'], len(card['handles'])))
         return
     directory = os.path.dirname(os.path.abspath(args.config))
@@ -442,7 +493,7 @@ def main():
         output('Mapping backup restored. No Homebase friends or Messages were deleted.'); return
     discovery_cards = None
     if args.command in ('discover', 'discover-import'):
-        book = parse_vcards(os.path.expanduser(args.vcard or ''), max_cards=10000, skip_invalid_names=True)
+        book = read_cards(os.path.expanduser(args.vcard or ''), max_cards=10000)
         source = c.Source(config['database'])
         discovery_cards, summary = discover_contacts(source, book, validated['_mapping'], limit=args.limit, include_groups=args.include_groups, include_mapped=args.include_mapped)
         show_discovery(discovery_cards, summary)
@@ -460,7 +511,7 @@ def main():
     else:
         if os.path.exists(pending):
             raise ContactError('A saved import is pending. Use resume before starting another.')
-        cards = discovery_cards if discovery_cards is not None else parse_vcards(os.path.expanduser(args.vcard or ''))
+        cards = discovery_cards if discovery_cards is not None else read_cards(os.path.expanduser(args.vcard or ''))
         roster = check_roster(send({'version': 1, 'action': 'list'}))
         plan = choose_plan(cards, roster, config)
         if not plan:

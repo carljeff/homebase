@@ -1,3 +1,7 @@
+# vCard compatibility update
+
+The parser now uses structured N names when FN is missing, normalizes version whitespace, and skips/counts incomplete unnamed or unversioned cards rather than blocking the whole export. Run `contacts.py vcard-info --vcard ~/Downloads/AllContacts.vcf` for a counts-only local check. It reads no Messages data, uses no credentials/network and changes nothing. Existing discover/import commands print the same parsing summary. Unsupported encodings/versions and malformed boundaries still fail safely.
+
 # Discover friends from recent Messages metadata
 
 New commands: `contacts.py discover --vcard ~/Downloads/AllContacts.vcf --limit 10000` (local-only preview), then `contacts.py discover-import` with the same options to choose people and approve names-only imports. The local Contacts export matches message participants to names; phone/email fields stay on the Mac. Known mappings are skipped by default, new observed handles are offered for review, groups remain separate and shared handles are never guessed. Rerun later as more messages sync. Existing pairing and scheduling are unchanged.
