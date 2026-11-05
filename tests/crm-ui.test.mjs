@@ -17,3 +17,23 @@ test('friend overview sorts oldest first and collapses help and detailed metrics
  assert.ok(host.querySelector('input[type="file"]').closest('.friends-tools'));
  assert.ok(cards[2].textContent.includes('Last contact'));await act(async()=>root.unmount());
 });
+test('birthday highlight overrides recency and birthday and partner edit without cluttering cards',async()=>{
+ globalThis.fetch=async()=>({ok:true,json:async()=>[]});
+ const host=document.getElementById('root'),root=createRoot(host),saved=[];
+ const dateParts=new Intl.DateTimeFormat('en-US',{timeZone:'America/Indiana/Indianapolis',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
+ const birthday=dateParts.find(p=>p.type==='month').value+'-'+dateParts.find(p=>p.type==='day').value;
+ const friend={id:'birthday-contact',kind:'friend',version:3,data:{name:'Z Birthday Friend',notes:'Keep these notes',birthday,partner:'PRIVATE_PARTNER',trackMessaging:true,reminderDays:14}};
+ await act(async()=>root.render(createElement(Friends,{rows:[{...friend,id:'ordinary',data:{...friend.data,name:'A Ordinary',birthday:null,partner:''}},friend],action:async input=>{saved.push(input);return true;},busy:false})));
+ const cards=[...host.querySelectorAll('.friend-card')];assert.equal(cards[0].querySelector('h3').textContent,friend.data.name);assert.match(cards[0].className,/friend-birthday/);assert.equal(cards[0].querySelector('.friend-birthday-badge').textContent,'🎂 Birthday today');assert.equal(cards[1].querySelector('.friend-birthday-badge'),null);
+ assert.ok(cards[0].querySelector('.friend-details').textContent.includes('PRIVATE_PARTNER'));assert.equal(cards[0].querySelector('.friend-details').hasAttribute('open'),false);
+ assert.ok(!host.querySelector('form'));assert.ok(!cards[0].textContent.includes(birthday));
+ await act(async()=>cards[0].querySelector('button').dispatchEvent(new window.Event('click',{bubbles:true})));
+ const form=host.querySelector('form');assert.ok(form.querySelector('fieldset').textContent.includes('Birthday'));assert.equal(form.querySelectorAll('select').length,2);
+ const partner=[...form.querySelectorAll('label')].find(l=>l.textContent==='Partner').querySelector('input');assert.equal(partner.value,'PRIVATE_PARTNER');
+ await act(async()=>form.dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true})));
+ assert.equal(saved[0].data.birthday,birthday);assert.equal(saved[0].data.partner,'PRIVATE_PARTNER');assert.equal(saved[0].data.notes,'Keep these notes');assert.equal(saved[0].version,3);
+ await act(async()=>host.querySelector('.friend-card button').dispatchEvent(new window.Event('click',{bubbles:true})));
+ await act(async()=>[...host.querySelectorAll('button')].find(b=>b.textContent==='Clear birthday').dispatchEvent(new window.Event('click',{bubbles:true})));
+ await act(async()=>host.querySelector('form').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true})));
+ assert.equal(saved[1].data.birthday,null);assert.equal(saved[1].data.partner,'PRIVATE_PARTNER');await act(async()=>root.unmount());
+});
