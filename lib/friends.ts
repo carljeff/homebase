@@ -24,10 +24,15 @@ export function compareContactRecency(a:{name:string;lastContact:string|null},b:
  const at=time(a.lastContact),bt=time(b.lastContact);
  return (at===bt?0:at<bt?-1:1)||a.name.localeCompare(b.name);
 }
+function contactCalendarDay(date:Date){
+ const parts=new Intl.DateTimeFormat('en-US',{timeZone:'America/Indiana/Indianapolis',year:'numeric',month:'numeric',day:'numeric'}).formatToParts(date);
+ const part=(type:string)=>Number(parts.find(p=>p.type===type)!.value);
+ return Date.UTC(part('year'),part('month')-1,part('day'));
+}
 export function contactRecency(lastContact:string|null,now=new Date()){
  if(!lastContact||!Number.isFinite(Date.parse(lastContact)))return {tone:'unknown',label:'No contact recorded',days:null};
- const days=Math.max(0,Math.floor((now.getTime()-Date.parse(lastContact))/86400000));
- return {tone:days<=7?'recent':days<=30?'warm':'distant',label:days===0?'Today':days===1?'1 day ago':`${days} days ago`,days};
+ const days=Math.max(0,Math.round((contactCalendarDay(now)-contactCalendarDay(new Date(lastContact)))/86400000));
+ return {tone:days<=7?'recent':days<=30?'warm':'distant',label:days===0?'Today':days===1?'Yesterday':`${days} days ago`,days};
 }
 
 /** Calendar birthdays use the household timezone, without collecting birth years. */
