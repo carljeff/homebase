@@ -1,3 +1,5 @@
+> Final hosting disposition and current support/device handoff: [FINAL_SECURITY_READINESS.md](FINAL_SECURITY_READINESS.md). Earlier version-specific notes below are historical; no additional deployment has occurred.
+
 > Current follow-up: [HARDENING_VALIDATION.md](HARDENING_VALIDATION.md). The branch now adds server-verifiable per-adult credential proofs; that code is not deployed. The support questions below remain unsent and unanswered. Fresh identity-provider MFA is defense in depth; proof of a newly unlocked vault credential now supplies destructive-action authorization. Review the latest hardening branch rather than treating the historical code hash below as current.
 
 # Family Vault: external review and hosting verification handoff
@@ -26,20 +28,11 @@ References checked November 5, 2026:
 - https://openai.com/policies/chatgpt-sites-terms/ (section 3.3)
 - https://openai.com/policies/chatgpt-sites-data-processing-addendum/
 
-## Ready-to-send support request — not sent
+## Current ready-to-send hosting request — NOT sent
 
-Subject: Sites encrypted family-vault feasibility: identity assurance and hosted-data retention
+The revised request is in [FINAL_SECURITY_READINESS.md, section 6](FINAL_SECURITY_READINESS.md#6-provider-request--ready-to-send-not-sent). It replaces the earlier six-question draft: per-adult vault-credential challenges now handle destructive-action authorization, so fresh identity-provider MFA is no longer the implementation blocker. Remaining questions are grouped into Q1 identity/ingress, Q2 isolation/delivery/remix, Q3 retention/logging/deletion and Q4 permitted identifier scope.
 
-I operate a private two-adult synthetic-data prototype on ChatGPT Sites. No real sensitive identifiers have been enabled. Browser Web Crypto encrypts records before transmission; vault passwords and plaintext keys are not sent to the Worker. The ordinary Homebase application and vault use separate origins. Before considering real identifiers, please confirm:
-
-1. Does Sites support a verified fresh authentication or MFA challenge for a sensitive operation? If so, what documented server-verifiable assertion/timestamp and request flow should the Worker use? A newly issued application bearer token does not establish fresh identity-provider login.
-2. Are inbound oai-authenticated-user-id/email headers stripped and replaced by dispatch on every route? Can the Worker/provider origin be reached without dispatch, and how is direct-origin bypass prevented? What happens to these headers for service-access/bypass-token requests?
-3. For the managed D1 database, what point-in-time history, replicas, snapshots and other backups exist? What are their retention/deletion windows after individual rows are erased and after Site deletion? What happens to old wrapped-key rows? Can retention be configured and is there an authoritative deletion commitment?
-4. What Worker/request/diagnostic logs are retained, for how long, and by whom? Are authorization headers or bodies captured anywhere by default? Which logging controls apply to managed Sites?
-5. Which administrative/support roles can read hosted ciphertext, runtime variables or deploy new frontend code? What audit logs or deployment protections are available to a personal-account Site owner?
-6. Is this encrypted-only personal-family identifier use supported under current Sites terms, excluding PHI and PCI data? Please distinguish policy numbers/reference text from health/claims data and clarify any relevant hosted-data restrictions. No document uploads are planned.
-
-Please provide supported documentation or a written product-specific answer. I am not requesting a subscription, new service, account change or sensitive-data import. I can provide the Site URL/account details privately through the support channel; no passwords, keys, real identifiers or record ciphertext need be included in this request.
+Official destination: the support chat bubble at https://help.openai.com/ . No official support-submission connector is available in this session. Nothing has been sent. No passwords, private keys, real identifiers, ciphertext or private contact data should be included. See the final readiness report for verified answers, accepted limitations and the prepared two-device test plan.
 
 ## Independent reviewer brief — not commissioned
 
