@@ -1,24 +1,28 @@
 #!/usr/bin/env python
-"""Keep the two GUI apps available; never kill apps or access message/contact content."""
+"""Keep the two GUI apps available; opt-in Contacts recovery; no message/contact content access."""
 from __future__ import print_function
-import argparse, datetime, fcntl, json, os, stat, subprocess, sys, tempfile, threading, time
+import argparse, datetime, fcntl, json, os, re, stat, subprocess, sys, tempfile, threading, time
 from xml.sax.saxutils import escape
 BASE = os.path.expanduser('~/Library/Application Support/HomebaseMessagesCRM')
 LABEL = 'com.homebase.app-guard'
 PLIST = os.path.expanduser('~/Library/LaunchAgents/' + LABEL + '.plist')
 STATE = 'app-guard-health.json'
 APPS = ('Messages', 'Contacts')
+RECOVERY = 'app-guard-recovery.json'
 
 
 def run(args, timeout=15):
     process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
+    expired = threading.Event()
     def stop_probe():
+        expired.set()
         try: process.kill()  # Only our short-lived pgrep/open/osascript child, never an app.
         except OSError: pass
     timer = threading.Timer(timeout, stop_probe); timer.daemon = True; timer.start()
     try:
-        out, unused = process.communicate()
-        return process.returncode, out
+        out, err = process.communicate()
+        code = 124 if expired.is_set() or b'(-1712)' in err else process.returncode
+        return code, out
     finally: timer.cancel()
 
 
@@ -27,25 +31,87 @@ def check(runner=run, uid=None):
     code, value = runner(['/usr/bin/stat', '-f', '%u', '/dev/console'])
     if code or value.strip() != str(uid).encode('ascii'):
         return {'status': 'no_active_desktop', 'apps': {}}
-    apps = {}
+    apps = {}; contacts_pid = None
     for app in APPS:
-        code, unused = runner(['/usr/bin/pgrep', '-u', str(uid), '-x', app])
+        code, process_ids = runner(['/usr/bin/pgrep', '-u', str(uid), '-x', app])
         if code == 1:
             opened, unused = runner(['/usr/bin/open', '-g', '-a', app])
             if opened:
                 apps[app] = 'open_failed'; continue
-            code, unused = runner(['/usr/bin/pgrep', '-u', str(uid), '-x', app])
+            code, process_ids = runner(['/usr/bin/pgrep', '-u', str(uid), '-x', app])
             apps[app] = 'reopened' if code == 0 else 'starting_or_unavailable'
         elif code == 0:
             apps[app] = 'running'
         else:
             apps[app] = 'process_check_failed'
+        if app == 'Contacts' and code == 0 and re.match(b'^[0-9]+$', process_ids.strip()): contacts_pid = process_ids.strip().decode('ascii')
     if apps.get('Contacts') in ('running', 'reopened'):
         code, value = runner(['/usr/bin/osascript', '-l', 'JavaScript', '-e', 'Application("Contacts").people.length'])
-        if code or not value.strip().isdigit():
+        if code in (124, -9):
+            apps['Contacts'] = 'unresponsive'
+        elif code or not value.strip().isdigit():
             apps['Contacts'] = 'not_responding_or_access_denied'
     healthy = all(apps.get(app) in ('running', 'reopened') for app in APPS)
-    return {'status': 'healthy' if healthy else 'needs_attention', 'apps': apps}
+    return {'status': 'healthy' if healthy else 'needs_attention', 'apps': apps, 'contactsPid': contacts_pid}
+
+
+def load_state(path):
+    safe_path(path)
+    if not os.path.isfile(path): return {}
+    with open(path) as src:
+        value = json.load(src)
+    if not isinstance(value, dict): raise RuntimeError('Invalid local guard state')
+    return value
+
+
+def recover(result, previous, enabled, persist, runner=run, now=None):
+    now = time.time() if now is None else now
+    last = previous.get('lastRecoveryAt', 0)
+    state = dict(result, lastRecoveryAt=last, failures=0, recovery='disabled' if not enabled else 'not_needed')
+    if result.get('apps', {}).get('Contacts') != 'unresponsive' or not result.get('contactsPid'): return state
+    pid = result['contactsPid']; old = previous.get('checkedEpoch', 0)
+    same = previous.get('contactsPid') == pid and previous.get('apps', {}).get('Contacts') == 'unresponsive'
+    count = previous.get('failures', 0) if same else 0
+    # Only checks spaced at least four minutes apart count; stale/clock-reset history does not.
+    if not same or now - old > 900 or now < old: count = 1
+    elif now - old >= 240: count += 1
+    state['failures'] = min(count, 3)
+    if not enabled: return state
+    state['recovery'] = 'waiting_for_three_timeouts'
+    if count < 3: return state
+    if last and now - last < 3600:
+        state['recovery'] = 'cooldown'; return state
+    # Verify desktop ownership and exact current Contacts PID immediately before recovery.
+    code, value = runner(['/usr/bin/stat', '-f', '%u', '/dev/console'])
+    if code or value.strip() != str(os.getuid()).encode('ascii'):
+        state['recovery'] = 'desktop_changed'; return state
+    code, value = runner(['/usr/bin/pgrep', '-u', str(os.getuid()), '-x', 'Contacts'])
+    if code or value.strip() != pid.encode('ascii'):
+        state['recovery'] = 'process_changed'; return state
+    state.update(lastRecoveryAt=now, failures=0, recovery='attempt_started')
+    persist(state)  # Durable cooldown before any quit; interrupted attempts cannot loop.
+    runner(['/usr/bin/osascript', '-e', 'tell application "Contacts" to quit'])
+    code, value = runner(['/usr/bin/pgrep', '-u', str(os.getuid()), '-x', 'Contacts'])
+    if code == 0 and value.strip() == pid.encode('ascii'):
+        # Never force-quit merely on a permission/script error or a changed process.
+        probe, unused = runner(['/usr/bin/osascript', '-l', 'JavaScript', '-e', 'Application("Contacts").people.length'])
+        if probe not in (124, -9):
+            state['recovery'] = 'quit_not_forced'; return state
+        owner_code, owner = runner(['/usr/bin/stat', '-f', '%u', '/dev/console'])
+        pid_code, current = runner(['/usr/bin/pgrep', '-u', str(os.getuid()), '-x', 'Contacts'])
+        if owner_code or owner.strip() != str(os.getuid()).encode('ascii') or pid_code or current.strip() != pid.encode('ascii'):
+            state['recovery'] = 'process_changed'; return state
+        stopped, unused = runner(['/bin/kill', '-KILL', pid])
+        if stopped:
+            state['recovery'] = 'stop_failed'; return state
+        state['recovery'] = 'force_restart_requested'
+    elif code == 1:
+        state['recovery'] = 'normal_restart_requested'
+    else:
+        state['recovery'] = 'process_changed'; return state
+    runner(['/usr/bin/open', '-g', '-a', 'Contacts'])
+    # A later scheduled check establishes success; opening is not proof of responsiveness.
+    return state
 
 
 def private_directory():
@@ -85,8 +151,9 @@ def template(script):
 
 def main():
     parser = argparse.ArgumentParser(description='Local Messages/Contacts availability guard; no content or network access')
-    parser.add_argument('command', choices=['check', 'health', 'enable', 'disable'])
+    parser.add_argument('command', choices=['check', 'health', 'enable', 'disable', 'enable-recovery', 'disable-recovery'])
     parser.add_argument('--approve-automation', action='store_true')
+    parser.add_argument('--approve-contacts-restart', action='store_true')
     args = parser.parse_args(); os.umask(0o077); private_directory()
     state_path = os.path.join(BASE, STATE)
     if args.command == 'check':
@@ -95,14 +162,25 @@ def main():
             try: fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except IOError:
                 print('App check already running.'); return
-            result = check(); result['checkedAt'] = datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'); result['checkedEpoch'] = time.time()
+            previous = load_state(state_path); enabled = load_state(os.path.join(BASE, RECOVERY)).get('enabled') is True
+            collector_path = os.path.join(BASE, 'collector.lock'); safe_path(collector_path)
+            with open(collector_path, 'a') as collector_lock:
+                try: fcntl.flock(collector_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except IOError:
+                    print('Collector busy; app recovery deferred.'); return
+                result = recover(check(), previous, enabled, lambda state: save(state_path, json.dumps(dict(state, checkedEpoch=time.time()))))
+            result['checkedAt'] = datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'); result['checkedEpoch'] = time.time()
             save(state_path, json.dumps(result, sort_keys=True)); print(json.dumps(result, sort_keys=True))
+    elif args.command in ('enable-recovery','disable-recovery'):
+        if args.command == 'enable-recovery' and not args.approve_contacts_restart: raise RuntimeError('Explicit Contacts restart approval required')
+        save(os.path.join(BASE, RECOVERY), json.dumps({'enabled': args.command == 'enable-recovery'}))
+        print('Contacts recovery ' + ('enabled after three spaced timeouts, at most once per hour. Unsaved Contacts edits may be lost.' if args.command == 'enable-recovery' else 'disabled; open-only guard retained.'))
     elif args.command == 'health':
         safe_path(state_path)
         if not os.path.isfile(state_path): print('Run a manual check first.'); return
         with open(state_path) as src: result = json.load(src)
         # Never echo arbitrary local file contents.
-        print(json.dumps({'status': result.get('status') if result.get('status') in ('healthy','needs_attention','no_active_desktop') else 'unknown', 'checkedAt': result.get('checkedAt'), 'stale': time.time() - result.get('checkedEpoch', 0) > 600, 'scheduled': os.path.isfile(PLIST)}, sort_keys=True))
+        print(json.dumps({'status': result.get('status') if result.get('status') in ('healthy','needs_attention','no_active_desktop') else 'unknown', 'checkedAt': result.get('checkedAt'), 'stale': time.time() - result.get('checkedEpoch', 0) > 600, 'scheduled': os.path.isfile(PLIST), 'contactsRecoveryEnabled': load_state(os.path.join(BASE, RECOVERY)).get('enabled') is True, 'recovery': result.get('recovery')}, sort_keys=True))
     elif args.command == 'enable':
         if not args.approve_automation: raise RuntimeError('Explicit approval required')
         safe_path(state_path)
@@ -132,5 +210,5 @@ def main():
 if __name__ == '__main__':
     try: main()
     except Exception:
-        print('App guard could not complete. Check the desktop login, private directory, and recent manual health check. No app was force-quit or data reset.', file=sys.stderr)
+        print('App guard could not complete. Check the desktop login, private directory, and recent manual health check. Inspect app health; no credential or data reset was requested.', file=sys.stderr)
         sys.exit(1)
