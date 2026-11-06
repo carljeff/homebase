@@ -1,3 +1,5 @@
+> Current follow-up: [HARDENING_VALIDATION.md](HARDENING_VALIDATION.md). The branch now adds server-verifiable per-adult credential proofs; that code is not deployed. The support questions below remain unsent and unanswered. Fresh identity-provider MFA is defense in depth; proof of a newly unlocked vault credential now supplies destructive-action authorization. Review the latest hardening branch rather than treating the historical code hash below as current.
+
 # Family Vault: external review and hosting verification handoff
 
 Prepared November 5, 2026. **Synthetic-only; real-data release blocked.** No external reviewer or paid service has been engaged, and the support request below has not been sent.

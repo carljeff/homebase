@@ -1,3 +1,5 @@
+> Historical v3 self-review. The current, un-deployed changes and remaining blockers are documented in [HARDENING_VALIDATION.md](HARDENING_VALIDATION.md). Fresh vault-credential proof replaces the earlier app-session-only erase flow.
+
 # Synthetic vault security review — November 5, 2026
 
 Status: engineering self-review and hardening, **not an independent security audit**. Synthetic demo only; no real identifiers or live Homebase vault deployment authorized. User confirmed successful two-adult sharing on their devices. Erase/restart remains the chosen loss-of-access model; backups, exports and recovery are intentionally absent.

@@ -1,3 +1,5 @@
+> Current branch changes are **not deployed**. See [HARDENING_VALIDATION.md](HARDENING_VALIDATION.md) for fresh per-adult erase/deletion proof and the first-adult action-key setup. The erase description below records the earlier hosted v3 behavior and is superseded by that report.
+
 # Shared synthetic Family Vault demo
 
 **Synthetic text only. Not audited or approved for real identifiers. Live Homebase is unchanged.**
@@ -47,7 +49,7 @@ Run:
 
 ```sh
 node scripts/bundle.mjs
-node --test tests.mjs sharing-tests.mjs hardening-tests.mjs
+node --test tests.mjs sharing-tests.mjs hardening-tests.mjs action-tests.mjs
 bash scripts/build.sh
 node scripts/validate-artifact.mjs
 ```

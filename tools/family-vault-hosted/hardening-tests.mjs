@@ -1,3 +1,4 @@
+import {enableActionKeys,proofFor} from './action-test-helpers.mjs';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {VaultSession} from './vault/session.mjs';
@@ -24,10 +25,10 @@ test('delete, approval and rejection recheck revoked sessions at the database wr
   const r=await encryptRecord(vault.key,{vaultId:vault.config.vaultId,profileId:profiles[0],id:crypto.randomUUID(),revision:1},{title:'DEMO: Guard',category:'Custom',value:'DEMO: GUARD',expires:'',notes:'DEMO: ',location:'DEMO: '});await call('/api/records','PUT',r,token);
   const second=(await(await call('/api/login','POST',{},null,'other')).json()).token,c=await createCredential('second hardening passphrase','other');await call('/api/enroll','POST',c,second,'other');
   const state=await(await call('/api/state','GET',undefined,token)).json(),req=state.requests[0],approval=await approveMember('synthetic hardening passphrase',state,req,c.fingerprint);
-  const original=f.env.DB.prepare;let triggered=false;
+  let proof;if(action==='delete'){await call('/api/approve','POST',approval,token);await enableActionKeys(call,token,second,'synthetic hardening passphrase','second hardening passphrase');proof=await proofFor(call,token,'synthetic-owner','synthetic hardening passphrase',{action:'delete',requestId:r.id,revision:1});}const original=f.env.DB.prepare;let triggered=false;
   f.env.DB.prepare=sql=>{const stmt=original(sql),bind=stmt.bind;stmt.bind=(...args)=>{const bound=bind(...args),run=bound.run;bound.run=async()=>{const target=action==='delete'?sql.startsWith('UPDATE demo_records SET deleted'):action==='approve'?sql.startsWith('UPDATE demo_members SET status'):sql.startsWith('DELETE FROM demo_members');if(target){triggered=true;f.db.prepare('DELETE FROM demo_sessions').run();}return run();};return bound;};return stmt;};
-  await call(action==='delete'?'/api/records':action==='approve'?'/api/approve':'/api/reject',action==='delete'?'DELETE':'POST',action==='delete'?{id:r.id,revision:1}:action==='approve'?approval:{requestId:req.requestId},token);
-  assert.ok(triggered);assert.equal(f.db.prepare('SELECT deleted FROM demo_records').get().deleted,0);assert.equal(f.db.prepare('SELECT status FROM demo_members').get().status,'pending');
+  await call(action==='delete'?'/api/records':action==='approve'?'/api/approve':'/api/reject',action==='delete'?'DELETE':'POST',action==='delete'?{id:r.id,revision:1,proof}:action==='approve'?approval:{requestId:req.requestId},token);
+  assert.ok(triggered);assert.equal(f.db.prepare('SELECT deleted FROM demo_records').get().deleted,0);if(action!=='delete')assert.equal(f.db.prepare('SELECT status FROM demo_members').get().status,'pending');
  });
 });
 test('responses explicitly prohibit framing and cross-origin resource use',()=>{
