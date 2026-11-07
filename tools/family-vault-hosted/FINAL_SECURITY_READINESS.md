@@ -1,15 +1,37 @@
 # Family Vault — final hosting and security readiness
 
-Evidence date: November 5, 2026 (America/Indiana/Indianapolis).
+Evidence updated November 6, 2026 (America/Indiana/Indianapolis).
 
 **Recommendation: NOT READY for real family identifiers yet.** The application has a credible, small design for convenience copies, but critical hosting assurances and device validation of the latest change remain unresolved. This investigation is complete to the extent of available evidence; the next step is one provider response and the planned device validation, not another open-ended source review.
 
-No deployment, merge, live-data mutation, sensitive-record inspection, service purchase, account change or support submission occurred. Application source review is proceeding separately and was not repeated. The previously reported 194 application / 27 vault tests are historical results of the latest code pass, not newly rerun or an independent audit.
+## Synthetic release v4
+
+The authorized hardened release is live at https://homebase-vault-demo.carl-jeff.chatgpt.site . The ordinary Homebase project was outside this deployment. Real identifier entry remains blocked.
+
+| Evidence | Result |
+| --- | --- |
+| Reviewed GitHub revision | `1f9393683bf71efc68ebe599d8cf986931743f0f` on PR #27 |
+| Hosted source revision | `1af7b050c01841dc8c644cc26dd8e5a99d4ba341` |
+| Saved version | v4, `appgprj_6aecd9fcffa48191a7b320b194ba9ba8~appgver_3d9c9a1a7bf48191b5eec1434c53fa3f` |
+| Deployment | `appgdep_6aee954fe9dc8191a14b1f745875adc8`, succeeded, runtime revision 1 |
+| Generated Worker SHA-256 | `ad7dae1e96c310fb9c40c5bbb4ae5e6dacba74ab67b3d1ee1d3544aca78f36d0` |
+| Local archive SHA-256 | `e68cc2e8375bc05dd1fd15333d5eaf905459f15b8f49fb456b2f9b848050b817` |
+| Provider archive content hash | `sha256:1760a9a70d0f449e22886ab62af8b5bb7d5aff6508e861c7839f2f30602fd1bd` |
+
+The hashes identify build artifacts. Independent attestation of the served JavaScript remains a provider question.
+
+- **Automated:** 194 application tests and 27 vault tests passed on this release. Coverage includes independent passwords and shared encrypted records, fingerprint substitution, password-protected destructive actions, actor/session binding, stale revisions, expiry and lock handling, and transactional two-adult erase using isolated fixtures. Worker bundling, build and artifact validation passed. No newly confirmed high or critical application issue surfaced in these checks.
+- **Migration:** `0002_action_proofs` creates two tables and an index. The local migration preserved a seeded vault row. Hosted schema inspection shows both new tables and the original vault, membership and record tables. Existing live record contents were not inspected. Confirm the existing synthetic records on both devices.
+- **Hosted:** Publication succeeded. Signed-out GET requests to `/` and `/api/state` returned HTTP 401. The metadata and schema checks passed. Authenticated CRUD, unlock, device locking and enrollment remain manual checks. The HTTP results cover only the two tested requests.
+- **Publishing policy:** Jeff is the sole Site owner and publisher under the configured roles. Lindsay is a viewer with vault access through application membership. The Site has no extra editors or groups and reports zero Site automations. The source credential was requested without publish-on-push and automatic publication was not accepted. All future publications require Jeff’s explicit approval and a recorded revision, version, deployment ID and artifact hash. Provider enforcement of approval across every integration remains unverified. Remix is enabled and the available controls expose no supported toggle.
+- **Support:** Case **#19275859** is awaiting technical clarification. Outstanding questions remain identity headers and alternate routes, physical isolation, privileged access, retention and logs, remixing, deployment attestation and permitted identifier scope.
+
+See [VAULT_USER_GUIDE.md](VAULT_USER_GUIDE.md) for the short device walkthrough. The v3 evidence below is retained for comparison.
 
 ## 1. Evidence and version boundary
 
 - GitHub hardening revision reviewed for deployment configuration: `ecdb073047a74df197aa7a7d38c040abeea98ada`, PR #27, branch `feat/vault-demo-hardening`. PR #26 contains the earlier sharing increment; its description links to #27. Neither PR was merged.
-- Hosted synthetic demo is still **v3**, source `3dada975932f67229ed3ddad819e29784ba6101c`, deployment `appgdep_6aed028e529481918e5ac689d75d5c17`, reported succeeded. It does **not** have the new action-proof flow.
+- The previous hosted synthetic demo was **v3**, source `3dada975932f67229ed3ddad819e29784ba6101c`, deployment `appgdep_6aed028e529481918e5ac689d75d5c17`, reported succeeded. That release predates the action-proof flow.
 - Vault project: `appgprj_6aecd9fcffa48191a7b320b194ba9ba8`. Homebase project: `appgprj_6ae16be43dfc8191a5aa58ab5d7c3532` (v29). Different project IDs and origins were confirmed in native metadata.
 - Read-only database overviews show `demo_*` tables for the vault and `records`, recipes, Friends/CRM tables for Homebase. No rows were fetched. Both logical bindings are named `DB`; that name is not a physical database identifier.
 - Current access policy: custom audience, one owner, one external viewer, no additional editors or groups. Runtime revision 1 has only the two adult-email configuration keys, both marked secret. Values are not reproduced here. The v3 deployment reports `has_mcp=false`.
@@ -85,9 +107,9 @@ Terms §3.3 explicitly prohibits PHI as defined there and PCI data (with its spe
 
 No new content filters were implemented because real-data entry remains disabled. Before any release, make the narrow allowed scope clear in the UI and retain the text-only/no-document restriction.
 
-## 6. Provider request — ready to send, NOT sent
+## 6. Provider questions — case #19275859
 
-No official support-submission connector is available in this session. Use the chat bubble at **https://help.openai.com/**, as described at https://help.openai.com/en/articles/6614161-how-can-i-contact-support . The owner may add account details privately there. No need to provide passwords, keys, real identifiers, ciphertext, full logs or contact data.
+The questions below record the scope of the pending case. Use the chat bubble at **https://help.openai.com/**, as described at https://help.openai.com/en/articles/6614161-how-can-i-contact-support . The owner may add account details privately there. No need to provide passwords, keys, real identifiers, ciphertext, full logs or contact data.
 
 **Subject: Private Sites encrypted identifier vault — ingress, storage and retention assurances**
 
@@ -105,9 +127,7 @@ Please link authoritative documentation or provide a written product-specific re
 
 ## 7. Synthetic-device validation plan
 
-Prepared, **not deployed**. Build output is ready locally; source remains the reviewed hardening branch. Publishing needs separate approval and exact source/artifact packaging through the normal workflow. Do not ship the unrelated Mac app-guard branch. The only new migration is schema-only `0002_action_proofs`; it preserves existing test records/wrapped keys. Old unproved erase requests are ignored. No live Homebase change is needed.
-
-After approval, deploy only the existing separate demo project, preserve the two-person audience and runtime adult configuration, then record saved version/source/deployment IDs and compare served local assets with the approved build where a signed-in browser permits. Keep the DEMO input restriction. If any provider prerequisite fails, stop real-data planning; synthetic functional testing can still continue.
+Run this plan on the deployed synthetic demo v4. The additive migration keeps existing wrapped keys and records in place. Old unproved erase requests are ignored.
 
 Use two separate signed-in browser sessions and disposable test passphrases. Neither adult should reveal their password to the other. Use existing fake records or clearly synthetic new records. Log only pass/fail and timestamps.
 
@@ -131,7 +151,7 @@ No new exploitable application vulnerability was confirmed in this hosting-only 
 
 - Obtain satisfactory Q1 ingress/identity and Q2 isolation/privilege answers, or choose a separately approved host with those documented guarantees. A denied probe is not sufficient.
 - Complete the separate source/protocol review already underway; resolve any high-impact findings. Do not label a model review an independent professional audit. Hiring a paid auditor is not automatically required for this small family use.
-- Approve the synthetic-demo-only deployment, complete the device plan on the exact hardened release, and record release provenance. No merge or production approval is implied.
+- Complete the device plan on the deployed synthetic v4 release and record the outcomes.
 - Establish the permitted narrow data scope and make an informed owner decision on provider logging/history/deletion limits (Q3/Q4). An unknown physical purge date may be explicitly accepted; it must not be advertised as instant erasure. PHI/PCI exclusions are not waivable by application consent.
 - Explicitly approve any later real-data enablement and production integration as a separate action.
 
@@ -152,7 +172,7 @@ The overall deployment risk is **not yet sufficiently characterized** to recomme
 | Lost locked iPhone/iPad | Depends on screen lock, OS/browser security and cached copies; those were not inspected. Background locking reduces opportunistic viewing. | High if device is compromised or copied clipboard/screenshots remain accessible. |
 | Compromised/unlocked device, malicious extension, or an adult sharing credentials | Conditional exposure is high; outside the app's ability to guarantee prevention. | High. Physical originals being available does not undo a disclosure. |
 
-**Smallest next actions:** send the single support request; finish the already-running code review; approve and run one synthetic-device validation release; then explicitly accept the listed residual limits and decide whether to enable real identifiers. No additional feature development or repeated review cycle is justified solely because provider answers are pending.
+**Smallest next actions:** obtain the pending support response, finish the separate code review, run the v4 device checks, then explicitly accept the listed residual limits and decide whether to enable real identifiers. No additional feature development or repeated review cycle is justified solely because provider answers are pending.
 
 ## References checked
 
